@@ -1,0 +1,3 @@
+# Adapt the .NET Pipe source for TeePipe
+
+TeePipe will begin as an adaptation of the MIT-licensed Microsoft `System.IO.Pipelines.Pipe` source rather than an unrelated reimplementation. The import will use Microsoft's `release/10.0` branch and record the exact commit copied so the source remains reproducible even as that branch advances. Relevant upstream Pipe tests will be adapted with the same provenance, then extended with TeeForge-specific broadcast and stress coverage. This preserves familiar behavior and proven implementation techniques where they remain valid, while TeePipe's broadcast reader model is developed as a distinct API under the TeeForge namespace; copied or substantially derived source will retain the .NET Foundation copyright and MIT license notices.

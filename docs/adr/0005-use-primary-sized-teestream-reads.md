@@ -1,0 +1,3 @@
+# Use primary-sized TeeStream reads
+
+TeeStream reads will obtain a result from the primary stream first, then read that exact byte count from every remaining destination and compare the content. This normalizes legal differences in partial-read chunking and keeps destination positions aligned when their byte sequences match, accepting that asynchronous reads cannot fan out to every destination simultaneously and may wait longer for slower mirrors. A zero-byte result from the primary is returned immediately without probing the other destinations, so the primary is authoritative for end-of-stream and trailing mirror data is deliberately not detected.

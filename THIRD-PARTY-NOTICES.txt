@@ -1,0 +1,13 @@
+TeeForge incorporates and adapts portions of System.IO.Pipelines from the
+.NET runtime repository.
+
+Source: https://github.com/dotnet/runtime
+Branch: release/10.0
+Commit: 4271d88e0aebf3d04f188f1334c2220d80555ef6
+Original path: src/libraries/System.IO.Pipelines/src/System/IO/Pipelines
+
+Copyright (c) .NET Foundation and Contributors
+
+The .NET runtime source is licensed under the MIT License. Derived source files
+retain the .NET Foundation license header. The upstream license is available at:
+https://github.com/dotnet/runtime/blob/4271d88e0aebf3d04f188f1334c2220d80555ef6/LICENSE.TXT

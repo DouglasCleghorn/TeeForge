@@ -1,0 +1,3 @@
+# Share buffer segments across TeePipe readers
+
+TeePipe will store each payload once in a shared pooled segment chain while maintaining independent consumed and examined positions for every reader. Writer backpressure follows the greatest unexamined byte count among active readers, while memory is reclaimed only after every active reader has consumed a segment. TeePipe retains the single shared core lock already present in Microsoft's Pipe design and introduces no additional locks; reader processing remains concurrent outside its short state-transition critical sections. This accepts more intricate bookkeeping than composing one `Pipe` per reader in exchange for avoiding per-reader payload copies and multiplied buffer memory.

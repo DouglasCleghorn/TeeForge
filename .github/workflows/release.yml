@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Package version; the selected Git ref must be the matching v-prefixed tag.
+        required: true
+        default: 0.1.0
+        type: string
+      publish_to_nuget:
+        description: Exchange an OIDC token and publish to nuget.org.
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Check out selected ref
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Verify tag and requested version
+        shell: pwsh
+        run: |
+          $expectedTag = "v${{ inputs.version }}"
+          $actualTag = git describe --tags --exact-match HEAD
+          if ($LASTEXITCODE -ne 0 -or $actualTag -ne $expectedTag) {
+            throw "Selected ref must point exactly at tag '$expectedTag'; found '$actualTag'."
+          }
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.400
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+
+      - name: Restore locked dependencies
+        run: dotnet restore TeeForge.slnx --locked-mode
+
+      - name: Build
+        run: dotnet build TeeForge.slnx -c Release --no-restore -p:Version=${{ inputs.version }}
+
+      - name: Test
+        run: dotnet test tests/TeeForge.Tests/TeeForge.Tests.csproj -c Release --no-build --no-restore
+
+      - name: Stress
+        run: dotnet run -c Release --project tests/TeeForge.StressTests --no-build -- 50
+
+      - name: Pack
+        run: dotnet pack src/TeeForge/TeeForge.csproj -c Release --no-build --no-restore -p:PackageVersion=${{ inputs.version }} -o artifacts/package
+
+      - name: Verify package contents
+        shell: pwsh
+        run: ./eng/verify-package.ps1 -ExpectedVersion '${{ inputs.version }}'
+
+      - name: Upload release candidate
+        uses: actions/upload-artifact@v7
+        with:
+          name: TeeForge-${{ inputs.version }}
+          path: artifacts/package/*
+          if-no-files-found: error
+
+      - name: Obtain short-lived NuGet credential
+        if: inputs.publish_to_nuget
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER }}
+
+      - name: Publish to nuget.org
+        if: inputs.publish_to_nuget
+        run: dotnet nuget push 'artifacts/package/*.nupkg' --api-key '${{ steps.nuget-login.outputs.NUGET_API_KEY }}' --source https://api.nuget.org/v3/index.json --skip-duplicate

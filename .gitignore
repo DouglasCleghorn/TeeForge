@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+**/BenchmarkDotNet.Artifacts/
+artifacts/
+.vs/
+.idea/
+.vscode/
+.upstream-runtime/
+TestResults/
+*.user
+*.suo
