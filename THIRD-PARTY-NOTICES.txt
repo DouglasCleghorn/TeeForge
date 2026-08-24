@@ -4,10 +4,25 @@ TeeForge incorporates and adapts portions of System.IO.Pipelines from the
 Source: https://github.com/dotnet/runtime
 Branch: release/10.0
 Commit: 4271d88e0aebf3d04f188f1334c2220d80555ef6
-Original path: src/libraries/System.IO.Pipelines/src/System/IO/Pipelines
+Original paths:
+- src/libraries/System.IO.Pipelines/src/System/IO/Pipelines
+- src/libraries/System.Private.CoreLib/src/System/IO/BufferedStream.cs
+- src/libraries/System.Runtime/tests/System.IO.Tests/BufferedStream
 
 Copyright (c) .NET Foundation and Contributors
 
 The .NET runtime source is licensed under the MIT License. Derived source files
 retain the .NET Foundation license header. The upstream license is available at:
 https://github.com/dotnet/runtime/blob/4271d88e0aebf3d04f188f1334c2220d80555ef6/LICENSE.TXT
+
+TeeForge depends on the System.IO.Hashing NuGet package from the .NET runtime
+repository for XXHash implementations used by its persistent media formats.
+
+Package: System.IO.Hashing 10.0.11
+Source: https://github.com/dotnet/runtime/tree/v10.0.11/src/libraries/System.IO.Hashing
+
+Copyright (c) .NET Foundation and Contributors
+
+System.IO.Hashing is licensed under the MIT License. The upstream license is
+available at:
+https://github.com/dotnet/runtime/blob/v10.0.11/LICENSE.TXT

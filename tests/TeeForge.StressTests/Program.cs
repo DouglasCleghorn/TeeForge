@@ -1,6 +1,6 @@
 using System.Buffers;
 using System.IO.Pipelines;
-using TeeForge;
+using TeeForge.Pipelines;
 
 int iterations = args.Length == 0 ? 25 : int.Parse(args[0], System.Globalization.CultureInfo.InvariantCulture);
 using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));

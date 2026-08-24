@@ -29,6 +29,7 @@ try {
     $required = @(
         "lib/net10.0/TeeForge.dll",
         "lib/net10.0/TeeForge.xml",
+        "teeforge-icon.png",
         "README.md",
         "CHANGELOG.md",
         "LICENSE",
@@ -71,9 +72,87 @@ try {
         throw "Package version '$($metadata.version)' does not match '$ExpectedVersion'."
     }
 
+    if ($metadata.title -ne "TeeForge") {
+        throw "Unexpected package title '$($metadata.title)'."
+    }
+
+    if ($metadata.authors -ne "Doug Cleghorn") {
+        throw "Unexpected package authors '$($metadata.authors)'."
+    }
+
+    $expectedDescription = "High-performance .NET streams for mirrored I/O, buffered fan-out, multi-hashing, broadcast pipelines, sparse storage, and HTTP range reads."
+    if ($metadata.description -ne $expectedDescription) {
+        throw "Unexpected package description '$($metadata.description)'."
+    }
+
+    $license = $metadata.license
+    if ($null -eq $license -or $license.InnerText -ne "MIT" -or
+        $license.GetAttribute("type") -ne "expression") {
+        throw "Package must use the MIT SPDX license expression."
+    }
+
+    if ($metadata.readme -ne "README.md") {
+        throw "Unexpected package README path '$($metadata.readme)'."
+    }
+
+    if ($metadata.icon -ne "teeforge-icon.png") {
+        throw "Unexpected package icon path '$($metadata.icon)'."
+    }
+
+    $iconEntry = $package.GetEntry("teeforge-icon.png")
+    if ($iconEntry.Length -gt 1MB) {
+        throw "Package icon exceeds NuGet's 1 MB limit."
+    }
+
+    $iconHeader = [byte[]]::new(24)
+    $iconStream = $iconEntry.Open()
+    try {
+        $read = $iconStream.Read($iconHeader, 0, $iconHeader.Length)
+    }
+    finally {
+        $iconStream.Dispose()
+    }
+
+    $pngSignature = [byte[]](137, 80, 78, 71, 13, 10, 26, 10)
+    $validPngSignature = $read -eq $iconHeader.Length
+    for ($index = 0; $validPngSignature -and $index -lt $pngSignature.Length; $index++) {
+        $validPngSignature = $iconHeader[$index] -eq $pngSignature[$index]
+    }
+
+    if (-not $validPngSignature) {
+        throw "Package icon is not a valid PNG."
+    }
+
+    $iconWidth = [System.Net.IPAddress]::NetworkToHostOrder(
+        [System.BitConverter]::ToInt32($iconHeader, 16))
+    $iconHeight = [System.Net.IPAddress]::NetworkToHostOrder(
+        [System.BitConverter]::ToInt32($iconHeader, 20))
+    if ($iconWidth -ne 128 -or $iconHeight -ne 128) {
+        throw "Package icon must be 128x128; found ${iconWidth}x${iconHeight}."
+    }
+
+    if ($metadata.projectUrl -ne "https://github.com/DouglasCleghorn/TeeForge") {
+        throw "Unexpected project URL '$($metadata.projectUrl)'."
+    }
+
+    if ([string]::IsNullOrWhiteSpace($metadata.releaseNotes)) {
+        throw "Package release notes are missing."
+    }
+
+    $repository = $metadata.repository
+    if ($null -eq $repository -or $repository.type -ne "git" -or
+        $repository.url -ne "https://github.com/DouglasCleghorn/TeeForge") {
+        throw "Package repository metadata is missing or incorrect."
+    }
+
     $dependencies = @($nuspec.SelectNodes("//*[local-name()='dependency']"))
-    if ($dependencies.Count -ne 0) {
-        throw "TeeForge must not have runtime NuGet dependencies."
+    if ($dependencies.Count -ne 1) {
+        throw "TeeForge must have exactly one runtime NuGet dependency; found $($dependencies.Count)."
+    }
+
+    $dependency = $dependencies[0]
+    if ($dependency.id -ne "System.IO.Hashing" -or $dependency.version -ne "10.0.11") {
+        throw "Unexpected runtime dependency '$($dependency.id)' version '$($dependency.version)'."
     }
 }
 finally {

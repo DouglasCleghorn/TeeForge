@@ -4,13 +4,17 @@
     <AssemblyName>TeeForge</AssemblyName>
     <RootNamespace>TeeForge</RootNamespace>
     <PackageId>TeeForge</PackageId>
+    <Title>TeeForge</Title>
     <Version>0.1.0</Version>
     <Authors>Doug Cleghorn</Authors>
     <Copyright>Copyright © 2026 Doug Cleghorn</Copyright>
-    <Description>High-performance mirrored streams and broadcast pipelines for .NET.</Description>
-    <PackageTags>stream;pipe;pipelines;broadcast;tee;raid;io</PackageTags>
+    <Description>High-performance .NET streams for mirrored I/O, buffered fan-out, multi-hashing, broadcast pipelines, sparse storage, and HTTP range reads.</Description>
+    <PackageTags>stream;pipe;pipelines;broadcast;tee;raid;io;hash;cryptography;sparse;virtual-disk;random-access;http-range</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PackageIcon>teeforge-icon.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReleaseNotes>Initial release with mirrored and buffered streams, multi-hash writes, fixed-reader broadcast pipelines, sparse block storage, explicit-offset random access, and resilient HTTP range reads. See https://github.com/DouglasCleghorn/TeeForge/blob/main/CHANGELOG.md#010---2026-08-23</PackageReleaseNotes>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/DouglasCleghorn/TeeForge</RepositoryUrl>
     <PackageProjectUrl>https://github.com/DouglasCleghorn/TeeForge</PackageProjectUrl>
@@ -27,9 +31,11 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="all" />
+    <PackageReference Include="System.IO.Hashing" />
   </ItemGroup>
   <ItemGroup>
     <None Include="../../README.md" Pack="true" PackagePath="/" />
+    <None Include="../../assets/teeforge-icon.png" Pack="true" PackagePath="/" />
     <None Include="../../CHANGELOG.md" Pack="true" PackagePath="/" />
     <None Include="../../LICENSE" Pack="true" PackagePath="/" />
     <None Include="../../THIRD-PARTY-NOTICES.txt" Pack="true" PackagePath="/" />

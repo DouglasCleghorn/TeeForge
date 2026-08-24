@@ -37,7 +37,7 @@ jobs:
         run: dotnet build TeeForge.slnx -c Release --no-restore
 
       - name: Test
-        run: dotnet test tests/TeeForge.Tests/TeeForge.Tests.csproj -c Release --no-build --no-restore
+        run: dotnet test --project tests/TeeForge.Tests/TeeForge.Tests.csproj -c Release --no-build --no-restore --minimum-expected-tests 1
 
       - name: Stress smoke
         if: runner.os == 'Linux'
