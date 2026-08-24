@@ -1,5 +1,7 @@
 # TeeForge
 
+![TeeForge icon](https://raw.githubusercontent.com/DouglasCleghorn/TeeForge/main/assets/teeforge-icon.png)
+
 High-performance .NET 10 streams for mirrored I/O, buffered fan-out,
 multi-hashing, broadcast pipelines, sparse storage, and HTTP range reads.
 
