@@ -1,1 +1,266 @@
 #nullable enable
+override TeeForge.Networking.NamedQuicStream.CanRead.get -> bool
+override TeeForge.Networking.NamedQuicStream.CanSeek.get -> bool
+override TeeForge.Networking.NamedQuicStream.CanWrite.get -> bool
+override TeeForge.Networking.NamedQuicStream.DisposeAsync() -> System.Threading.Tasks.ValueTask
+override TeeForge.Networking.NamedQuicStream.Flush() -> void
+override TeeForge.Networking.NamedQuicStream.FlushAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+override TeeForge.Networking.NamedQuicStream.Length.get -> long
+override TeeForge.Networking.NamedQuicStream.Position.get -> long
+override TeeForge.Networking.NamedQuicStream.Position.set -> void
+override TeeForge.Networking.NamedQuicStream.Read(byte[]! buffer, int offset, int count) -> int
+override TeeForge.Networking.NamedQuicStream.Read(System.Span<byte> buffer) -> int
+override TeeForge.Networking.NamedQuicStream.ReadAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<int>!
+override TeeForge.Networking.NamedQuicStream.ReadAsync(System.Memory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
+override TeeForge.Networking.NamedQuicStream.Seek(long offset, System.IO.SeekOrigin origin) -> long
+override TeeForge.Networking.NamedQuicStream.SetLength(long value) -> void
+override TeeForge.Networking.NamedQuicStream.Write(byte[]! buffer, int offset, int count) -> void
+override TeeForge.Networking.NamedQuicStream.Write(System.ReadOnlySpan<byte> buffer) -> void
+override TeeForge.Networking.NamedQuicStream.WriteAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+override TeeForge.Networking.NamedQuicStream.WriteAsync(System.ReadOnlyMemory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+static TeeForge.Networking.MutualQuicConnection.ConnectAsync(System.Net.EndPoint! remoteEndPoint, string! targetHost, TeeForge.Networking.MutualQuicConnectionOptions! options, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TeeForge.Networking.MutualQuicConnection!>
+static TeeForge.Networking.MutualQuicConnection.IsSupported.get -> bool
+static TeeForge.Networking.MutualQuicConnectionListener.IsSupported.get -> bool
+static TeeForge.Networking.MutualQuicConnectionListener.ListenAsync(System.Net.IPEndPoint! listenEndPoint, TeeForge.Networking.MutualQuicConnectionOptions! options, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TeeForge.Networking.MutualQuicConnectionListener!>
+TeeForge.Networking.MutualQuicConnection
+TeeForge.Networking.MutualQuicConnection.AcceptStreamAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TeeForge.Networking.NamedQuicStream!>
+TeeForge.Networking.MutualQuicConnection.DisposeAsync() -> System.Threading.Tasks.ValueTask
+TeeForge.Networking.MutualQuicConnection.IsClient.get -> bool
+TeeForge.Networking.MutualQuicConnection.LocalEndPoint.get -> System.Net.IPEndPoint!
+TeeForge.Networking.MutualQuicConnection.NegotiatedApplicationProtocol.get -> System.Net.Security.SslApplicationProtocol
+TeeForge.Networking.MutualQuicConnection.OpenRandomAccessAsync(string! name, TeeForge.Networking.QuicRandomAccessOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TeeForge.Networking.QuicRandomAccessChannel!>
+TeeForge.Networking.MutualQuicConnection.OpenStreamAsync(string! name, TeeForge.Networking.NamedQuicStreamOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TeeForge.Networking.NamedQuicStream!>
+TeeForge.Networking.MutualQuicConnection.RegisterRandomAccess(string! name, TeeForge.RandomAccess.ITeeRandomAccessStream! randomAccess) -> void
+TeeForge.Networking.MutualQuicConnection.RemoteCertificate.get -> System.Security.Cryptography.X509Certificates.X509Certificate?
+TeeForge.Networking.MutualQuicConnection.RemoteEndPoint.get -> System.Net.IPEndPoint!
+TeeForge.Networking.MutualQuicConnection.UnregisterRandomAccess(string! name) -> bool
+TeeForge.Networking.MutualQuicConnectionListener
+TeeForge.Networking.MutualQuicConnectionListener.AcceptConnectionAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TeeForge.Networking.MutualQuicConnection!>
+TeeForge.Networking.MutualQuicConnectionListener.DisposeAsync() -> System.Threading.Tasks.ValueTask
+TeeForge.Networking.MutualQuicConnectionListener.LocalEndPoint.get -> System.Net.IPEndPoint!
+TeeForge.Networking.MutualQuicConnectionOptions
+TeeForge.Networking.MutualQuicConnectionOptions.AllowedCompressions.get -> TeeForge.Networking.QuicStreamCompressionAlgorithms
+TeeForge.Networking.MutualQuicConnectionOptions.ApplicationProtocol.get -> System.Net.Security.SslApplicationProtocol
+TeeForge.Networking.MutualQuicConnectionOptions.DefaultCloseErrorCode.get -> long
+TeeForge.Networking.MutualQuicConnectionOptions.DefaultStreamErrorCode.get -> long
+TeeForge.Networking.MutualQuicConnectionOptions.HandshakeTimeout.get -> System.TimeSpan
+TeeForge.Networking.MutualQuicConnectionOptions.IdleTimeout.get -> System.TimeSpan
+TeeForge.Networking.MutualQuicConnectionOptions.LocalCertificatePath.get -> string!
+TeeForge.Networking.MutualQuicConnectionOptions.LocalPrivateKeyPath.get -> string!
+TeeForge.Networking.MutualQuicConnectionOptions.MaximumInboundBidirectionalStreams.get -> int
+TeeForge.Networking.MutualQuicConnectionOptions.MaximumPendingNamedStreams.get -> int
+TeeForge.Networking.MutualQuicConnectionOptions.MaximumRandomAccessRequestSize.get -> int
+TeeForge.Networking.MutualQuicConnectionOptions.MaximumRandomAccessSessions.get -> int
+TeeForge.Networking.MutualQuicConnectionOptions.MutualQuicConnectionOptions(string! localCertificatePath, string! localPrivateKeyPath, string! trustedPeerCertificatePath, System.Net.Security.SslApplicationProtocol applicationProtocol, System.TimeSpan? idleTimeout = null, System.TimeSpan? handshakeTimeout = null, long defaultCloseErrorCode = 0, long defaultStreamErrorCode = 0, int maximumInboundBidirectionalStreams = 100, int maximumPendingNamedStreams = 100, int maximumRandomAccessRequestSize = 1048576, int maximumRandomAccessSessions = 100, TeeForge.Networking.QuicStreamCompressionAlgorithms allowedCompressions = TeeForge.Networking.QuicStreamCompressionAlgorithms.All) -> void
+TeeForge.Networking.MutualQuicConnectionOptions.TrustedPeerCertificatePath.get -> string!
+override TeeForge.Composition.HandoffStream.CanRead.get -> bool
+override TeeForge.Composition.HandoffStream.CanSeek.get -> bool
+override TeeForge.Composition.HandoffStream.CanTimeout.get -> bool
+override TeeForge.Composition.HandoffStream.CanWrite.get -> bool
+override TeeForge.Composition.HandoffStream.CopyTo(System.IO.Stream! destination, int bufferSize) -> void
+override TeeForge.Composition.HandoffStream.CopyToAsync(System.IO.Stream! destination, int bufferSize, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+override TeeForge.Composition.HandoffStream.Dispose(bool disposing) -> void
+override TeeForge.Composition.HandoffStream.DisposeAsync() -> System.Threading.Tasks.ValueTask
+override TeeForge.Composition.HandoffStream.Flush() -> void
+override TeeForge.Composition.HandoffStream.FlushAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+override TeeForge.Composition.HandoffStream.Length.get -> long
+override TeeForge.Composition.HandoffStream.Position.get -> long
+override TeeForge.Composition.HandoffStream.Position.set -> void
+override TeeForge.Composition.HandoffStream.Read(byte[]! buffer, int offset, int count) -> int
+override TeeForge.Composition.HandoffStream.Read(System.Span<byte> buffer) -> int
+override TeeForge.Composition.HandoffStream.ReadAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<int>!
+override TeeForge.Composition.HandoffStream.ReadAsync(System.Memory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
+override TeeForge.Composition.HandoffStream.ReadByte() -> int
+override TeeForge.Composition.HandoffStream.ReadTimeout.get -> int
+override TeeForge.Composition.HandoffStream.ReadTimeout.set -> void
+override TeeForge.Composition.HandoffStream.Seek(long offset, System.IO.SeekOrigin origin) -> long
+override TeeForge.Composition.HandoffStream.SetLength(long value) -> void
+override TeeForge.Composition.HandoffStream.Write(byte[]! buffer, int offset, int count) -> void
+override TeeForge.Composition.HandoffStream.Write(System.ReadOnlySpan<byte> buffer) -> void
+override TeeForge.Composition.HandoffStream.WriteAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+override TeeForge.Composition.HandoffStream.WriteAsync(System.ReadOnlyMemory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+override TeeForge.Composition.HandoffStream.WriteByte(byte value) -> void
+override TeeForge.Composition.HandoffStream.WriteTimeout.get -> int
+override TeeForge.Composition.HandoffStream.WriteTimeout.set -> void
+TeeForge.Composition.HandoffStream
+TeeForge.Composition.HandoffStream.CanReadAt.get -> bool
+TeeForge.Composition.HandoffStream.CanWriteAt.get -> bool
+TeeForge.Composition.HandoffStream.Handoff(System.IO.Stream! stream) -> void
+TeeForge.Composition.HandoffStream.HandoffAsync(System.IO.Stream! stream, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+TeeForge.Composition.HandoffStream.HandoffStream(System.IO.Stream! stream, bool leaveOpen = false) -> void
+TeeForge.Composition.HandoffStream.LeaveOpen.get -> bool
+TeeForge.Composition.HandoffStream.ReadAt(System.Span<byte> buffer, long offset) -> int
+TeeForge.Composition.HandoffStream.ReadAtAsync(System.Memory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
+TeeForge.Composition.HandoffStream.WriteAt(System.ReadOnlySpan<byte> buffer, long offset) -> void
+TeeForge.Composition.HandoffStream.WriteAtAsync(System.ReadOnlyMemory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+override TeeForge.ErasureCoding.ErasureCodeStream.CanRead.get -> bool
+override TeeForge.ErasureCoding.ErasureCodeStream.CanSeek.get -> bool
+override TeeForge.ErasureCoding.ErasureCodeStream.CanWrite.get -> bool
+override TeeForge.ErasureCoding.ErasureCodeStream.DisposeAsync() -> System.Threading.Tasks.ValueTask
+override TeeForge.ErasureCoding.ErasureCodeStream.Flush() -> void
+override TeeForge.ErasureCoding.ErasureCodeStream.FlushAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+override TeeForge.ErasureCoding.ErasureCodeStream.Length.get -> long
+override TeeForge.ErasureCoding.ErasureCodeStream.Position.get -> long
+override TeeForge.ErasureCoding.ErasureCodeStream.Position.set -> void
+override TeeForge.ErasureCoding.ErasureCodeStream.Read(byte[]! buffer, int offset, int count) -> int
+override TeeForge.ErasureCoding.ErasureCodeStream.Read(System.Span<byte> buffer) -> int
+override TeeForge.ErasureCoding.ErasureCodeStream.ReadAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<int>!
+override TeeForge.ErasureCoding.ErasureCodeStream.ReadAsync(System.Memory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
+override TeeForge.ErasureCoding.ErasureCodeStream.Seek(long offset, System.IO.SeekOrigin origin) -> long
+override TeeForge.ErasureCoding.ErasureCodeStream.SetLength(long value) -> void
+override TeeForge.ErasureCoding.ErasureCodeStream.Write(byte[]! buffer, int offset, int count) -> void
+override TeeForge.ErasureCoding.ErasureCodeStream.Write(System.ReadOnlySpan<byte> buffer) -> void
+override TeeForge.ErasureCoding.ErasureCodeStream.WriteAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+override TeeForge.ErasureCoding.ErasureCodeStream.WriteAsync(System.ReadOnlyMemory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+static TeeForge.ErasureCoding.ErasureCodeStream.Create(System.Collections.Generic.IEnumerable<System.IO.Stream!>! members, int dataShardCount, int parityShardCount, long logicalCapacity, int shardSize = 1048576, TeeForge.ErasureCoding.ErasureCodeStreamOptions? options = null) -> TeeForge.ErasureCoding.ErasureCodeStream!
+static TeeForge.ErasureCoding.ErasureCodeStream.CreateAsync(System.Collections.Generic.IEnumerable<System.IO.Stream!>! members, int dataShardCount, int parityShardCount, long logicalCapacity, int shardSize = 1048576, TeeForge.ErasureCoding.ErasureCodeStreamOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TeeForge.ErasureCoding.ErasureCodeStream!>
+static TeeForge.ErasureCoding.ErasureCodeStream.Open(System.Collections.Generic.IEnumerable<System.IO.Stream!>! members, TeeForge.ErasureCoding.ErasureCodeStreamOptions? options = null) -> TeeForge.ErasureCoding.ErasureCodeStream!
+static TeeForge.ErasureCoding.ErasureCodeStream.OpenAsync(System.Collections.Generic.IEnumerable<System.IO.Stream!>! members, TeeForge.ErasureCoding.ErasureCodeStreamOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TeeForge.ErasureCoding.ErasureCodeStream!>
+static TeeForge.ErasureCoding.ErasureCodeStreamOptions.Default.get -> TeeForge.ErasureCoding.ErasureCodeStreamOptions!
+static TeeForge.ErasureCoding.ErasureMaintenanceOptions.Default.get -> TeeForge.ErasureCoding.ErasureMaintenanceOptions!
+TeeForge.ErasureCoding.ErasureCodeStream
+TeeForge.ErasureCoding.ErasureCodeStream.CanReadAt.get -> bool
+TeeForge.ErasureCoding.ErasureCodeStream.CanWriteAt.get -> bool
+TeeForge.ErasureCoding.ErasureCodeStream.CheckConsistencyAsync(TeeForge.ErasureCoding.ErasureMaintenanceOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TeeForge.ErasureCoding.ErasureConsistencyCheckResult!>
+TeeForge.ErasureCoding.ErasureCodeStream.ConfigurationId.get -> System.Guid
+TeeForge.ErasureCoding.ErasureCodeStream.DataShardCount.get -> int
+TeeForge.ErasureCoding.ErasureCodeStream.GetState() -> TeeForge.ErasureCoding.ErasureCodeStreamState!
+TeeForge.ErasureCoding.ErasureCodeStream.IsReadOnly.get -> bool
+TeeForge.ErasureCoding.ErasureCodeStream.ParityShardCount.get -> int
+TeeForge.ErasureCoding.ErasureCodeStream.ReadAt(System.Span<byte> buffer, long offset) -> int
+TeeForge.ErasureCoding.ErasureCodeStream.ReadAtAsync(System.Memory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
+TeeForge.ErasureCoding.ErasureCodeStream.RegisterMaintenanceHandler(System.Action<TeeForge.ErasureCoding.ErasureMaintenanceProgress!>! handler) -> System.IDisposable!
+TeeForge.ErasureCoding.ErasureCodeStream.RegisterStateChangeHandler(System.Action<TeeForge.ErasureCoding.ErasureCodeStreamStateChangedEventArgs!>! handler, bool invokeImmediately = true) -> System.IDisposable!
+TeeForge.ErasureCoding.ErasureCodeStream.SetId.get -> System.Guid
+TeeForge.ErasureCoding.ErasureCodeStream.ShardSize.get -> int
+TeeForge.ErasureCoding.ErasureCodeStream.WriteAt(System.ReadOnlySpan<byte> buffer, long offset) -> void
+TeeForge.ErasureCoding.ErasureCodeStream.WriteAtAsync(System.ReadOnlyMemory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+TeeForge.ErasureCoding.ErasureCodeStreamCorruptionException
+TeeForge.ErasureCoding.ErasureCodeStreamCorruptionException.ErasureCodeStreamCorruptionException(string! message, System.Exception? innerException = null) -> void
+TeeForge.ErasureCoding.ErasureCodeStreamOptions
+TeeForge.ErasureCoding.ErasureCodeStreamOptions.ErasureCodeStreamOptions(bool leaveOpen = false, bool readOnly = false, int journalSlotCount = 4, int latencySampleRate = 64) -> void
+TeeForge.ErasureCoding.ErasureCodeStreamOptions.JournalSlotCount.get -> int
+TeeForge.ErasureCoding.ErasureCodeStreamOptions.LatencySampleRate.get -> int
+TeeForge.ErasureCoding.ErasureCodeStreamOptions.LeaveOpen.get -> bool
+TeeForge.ErasureCoding.ErasureCodeStreamOptions.ReadOnly.get -> bool
+TeeForge.ErasureCoding.ErasureCodeStreamState
+TeeForge.ErasureCoding.ErasureCodeStreamState.CanRead.get -> bool
+TeeForge.ErasureCoding.ErasureCodeStreamState.CanWrite.get -> bool
+TeeForge.ErasureCoding.ErasureCodeStreamState.IsReadOnly.get -> bool
+TeeForge.ErasureCoding.ErasureCodeStreamState.Members.get -> System.Collections.Generic.IReadOnlyList<TeeForge.ErasureCoding.ErasureMemberState!>!
+TeeForge.ErasureCoding.ErasureCodeStreamState.ObservedAt.get -> System.DateTimeOffset
+TeeForge.ErasureCoding.ErasureCodeStreamState.ReadQuorum.get -> int
+TeeForge.ErasureCoding.ErasureCodeStreamState.Status.get -> TeeForge.ErasureCoding.ErasureCodeStreamStatus
+TeeForge.ErasureCoding.ErasureCodeStreamState.WriteQuorum.get -> int
+TeeForge.ErasureCoding.ErasureCodeStreamStateChangedEventArgs
+TeeForge.ErasureCoding.ErasureCodeStreamStateChangedEventArgs.Current.get -> TeeForge.ErasureCoding.ErasureCodeStreamState!
+TeeForge.ErasureCoding.ErasureCodeStreamStateChangedEventArgs.Previous.get -> TeeForge.ErasureCoding.ErasureCodeStreamState!
+TeeForge.ErasureCoding.ErasureCodeStreamStatus
+TeeForge.ErasureCoding.ErasureCodeStreamStatus.Degraded = 1 -> TeeForge.ErasureCoding.ErasureCodeStreamStatus
+TeeForge.ErasureCoding.ErasureCodeStreamStatus.Disposed = 4 -> TeeForge.ErasureCoding.ErasureCodeStreamStatus
+TeeForge.ErasureCoding.ErasureCodeStreamStatus.Faulted = 3 -> TeeForge.ErasureCoding.ErasureCodeStreamStatus
+TeeForge.ErasureCoding.ErasureCodeStreamStatus.Healthy = 0 -> TeeForge.ErasureCoding.ErasureCodeStreamStatus
+TeeForge.ErasureCoding.ErasureCodeStreamStatus.Unavailable = 2 -> TeeForge.ErasureCoding.ErasureCodeStreamStatus
+TeeForge.ErasureCoding.ErasureConsistencyCheckResult
+TeeForge.ErasureCoding.ErasureConsistencyCheckResult.CheckedBytes.get -> long
+TeeForge.ErasureCoding.ErasureConsistencyCheckResult.CheckedStripes.get -> long
+TeeForge.ErasureCoding.ErasureConsistencyCheckResult.InconsistentMemberPositions.get -> System.Collections.Generic.IReadOnlyList<int>!
+TeeForge.ErasureCoding.ErasureConsistencyCheckResult.IsConsistent.get -> bool
+TeeForge.ErasureCoding.ErasureConsistencyCheckResult.OperationId.get -> System.Guid
+TeeForge.ErasureCoding.ErasureMaintenanceOperation
+TeeForge.ErasureCoding.ErasureMaintenanceOperation.ConsistencyCheck = 0 -> TeeForge.ErasureCoding.ErasureMaintenanceOperation
+TeeForge.ErasureCoding.ErasureMaintenanceOptions
+TeeForge.ErasureCoding.ErasureMaintenanceOptions.BackgroundDelay.get -> System.TimeSpan
+TeeForge.ErasureCoding.ErasureMaintenanceOptions.ErasureMaintenanceOptions(TeeForge.ErasureCoding.ErasureMaintenancePriority priority = TeeForge.ErasureCoding.ErasureMaintenancePriority.Background, long maximumBytesPerSecond = 0, System.TimeSpan? backgroundDelay = null) -> void
+TeeForge.ErasureCoding.ErasureMaintenanceOptions.MaximumBytesPerSecond.get -> long
+TeeForge.ErasureCoding.ErasureMaintenanceOptions.Priority.get -> TeeForge.ErasureCoding.ErasureMaintenancePriority
+TeeForge.ErasureCoding.ErasureMaintenancePriority
+TeeForge.ErasureCoding.ErasureMaintenancePriority.Background = 2 -> TeeForge.ErasureCoding.ErasureMaintenancePriority
+TeeForge.ErasureCoding.ErasureMaintenancePriority.Balanced = 1 -> TeeForge.ErasureCoding.ErasureMaintenancePriority
+TeeForge.ErasureCoding.ErasureMaintenancePriority.Foreground = 0 -> TeeForge.ErasureCoding.ErasureMaintenancePriority
+TeeForge.ErasureCoding.ErasureMaintenanceProgress
+TeeForge.ErasureCoding.ErasureMaintenanceProgress.CompletedBytes.get -> long
+TeeForge.ErasureCoding.ErasureMaintenanceProgress.Error.get -> System.Exception?
+TeeForge.ErasureCoding.ErasureMaintenanceProgress.InconsistentMembers.get -> int
+TeeForge.ErasureCoding.ErasureMaintenanceProgress.Operation.get -> TeeForge.ErasureCoding.ErasureMaintenanceOperation
+TeeForge.ErasureCoding.ErasureMaintenanceProgress.OperationId.get -> System.Guid
+TeeForge.ErasureCoding.ErasureMaintenanceProgress.Status.get -> TeeForge.ErasureCoding.ErasureMaintenanceStatus
+TeeForge.ErasureCoding.ErasureMaintenanceProgress.TotalBytes.get -> long
+TeeForge.ErasureCoding.ErasureMaintenanceStatus
+TeeForge.ErasureCoding.ErasureMaintenanceStatus.Canceled = 2 -> TeeForge.ErasureCoding.ErasureMaintenanceStatus
+TeeForge.ErasureCoding.ErasureMaintenanceStatus.Completed = 1 -> TeeForge.ErasureCoding.ErasureMaintenanceStatus
+TeeForge.ErasureCoding.ErasureMaintenanceStatus.Faulted = 3 -> TeeForge.ErasureCoding.ErasureMaintenanceStatus
+TeeForge.ErasureCoding.ErasureMaintenanceStatus.Running = 0 -> TeeForge.ErasureCoding.ErasureMaintenanceStatus
+TeeForge.ErasureCoding.ErasureMemberPerformance
+TeeForge.ErasureCoding.ErasureMemberPerformance.BytesRead.get -> long
+TeeForge.ErasureCoding.ErasureMemberPerformance.BytesWritten.get -> long
+TeeForge.ErasureCoding.ErasureMemberPerformance.Errors.get -> long
+TeeForge.ErasureCoding.ErasureMemberPerformance.FlushLatencyMilliseconds.get -> double
+TeeForge.ErasureCoding.ErasureMemberPerformance.FlushOperations.get -> long
+TeeForge.ErasureCoding.ErasureMemberPerformance.LatencyBuckets.get -> System.Collections.Generic.IReadOnlyList<long>!
+TeeForge.ErasureCoding.ErasureMemberPerformance.MaximumSampledLatencyMilliseconds.get -> double
+TeeForge.ErasureCoding.ErasureMemberPerformance.ReadLatencyMilliseconds.get -> double
+TeeForge.ErasureCoding.ErasureMemberPerformance.ReadOperations.get -> long
+TeeForge.ErasureCoding.ErasureMemberPerformance.ReadThroughputBytesPerSecond.get -> double
+TeeForge.ErasureCoding.ErasureMemberPerformance.ReconstructionBytes.get -> long
+TeeForge.ErasureCoding.ErasureMemberPerformance.SampledFlushes.get -> long
+TeeForge.ErasureCoding.ErasureMemberPerformance.SampledReads.get -> long
+TeeForge.ErasureCoding.ErasureMemberPerformance.SampledWrites.get -> long
+TeeForge.ErasureCoding.ErasureMemberPerformance.WriteLatencyMilliseconds.get -> double
+TeeForge.ErasureCoding.ErasureMemberPerformance.WriteOperations.get -> long
+TeeForge.ErasureCoding.ErasureMemberPerformance.WriteThroughputBytesPerSecond.get -> double
+TeeForge.ErasureCoding.ErasureMemberRole
+TeeForge.ErasureCoding.ErasureMemberRole.Data = 0 -> TeeForge.ErasureCoding.ErasureMemberRole
+TeeForge.ErasureCoding.ErasureMemberRole.Parity = 1 -> TeeForge.ErasureCoding.ErasureMemberRole
+TeeForge.ErasureCoding.ErasureMemberState
+TeeForge.ErasureCoding.ErasureMemberState.CanRead.get -> bool
+TeeForge.ErasureCoding.ErasureMemberState.CanWrite.get -> bool
+TeeForge.ErasureCoding.ErasureMemberState.MemberId.get -> System.Guid
+TeeForge.ErasureCoding.ErasureMemberState.Performance.get -> TeeForge.ErasureCoding.ErasureMemberPerformance!
+TeeForge.ErasureCoding.ErasureMemberState.Position.get -> int
+TeeForge.ErasureCoding.ErasureMemberState.Role.get -> TeeForge.ErasureCoding.ErasureMemberRole
+TeeForge.ErasureCoding.ErasureMemberState.Status.get -> TeeForge.ErasureCoding.ErasureMemberStatus
+TeeForge.ErasureCoding.ErasureMemberStatus
+TeeForge.ErasureCoding.ErasureMemberStatus.Corrupt = 3 -> TeeForge.ErasureCoding.ErasureMemberStatus
+TeeForge.ErasureCoding.ErasureMemberStatus.Missing = 1 -> TeeForge.ErasureCoding.ErasureMemberStatus
+TeeForge.ErasureCoding.ErasureMemberStatus.Online = 0 -> TeeForge.ErasureCoding.ErasureMemberStatus
+TeeForge.ErasureCoding.ErasureMemberStatus.Rebuilding = 4 -> TeeForge.ErasureCoding.ErasureMemberStatus
+TeeForge.ErasureCoding.ErasureMemberStatus.Retired = 5 -> TeeForge.ErasureCoding.ErasureMemberStatus
+TeeForge.ErasureCoding.ErasureMemberStatus.Stale = 2 -> TeeForge.ErasureCoding.ErasureMemberStatus
+TeeForge.Networking.NamedQuicStream
+TeeForge.Networking.NamedQuicStream.Abort(System.Net.Quic.QuicAbortDirection direction, long errorCode) -> void
+TeeForge.Networking.NamedQuicStream.CompleteWrites() -> void
+TeeForge.Networking.NamedQuicStream.Compression.get -> TeeForge.Networking.QuicStreamCompression
+TeeForge.Networking.NamedQuicStream.Id.get -> long
+TeeForge.Networking.NamedQuicStream.Input.get -> System.IO.Pipelines.PipeReader!
+TeeForge.Networking.NamedQuicStream.Name.get -> string!
+TeeForge.Networking.NamedQuicStream.Output.get -> System.IO.Pipelines.PipeWriter!
+TeeForge.Networking.NamedQuicStream.ReadsClosed.get -> System.Threading.Tasks.Task!
+TeeForge.Networking.NamedQuicStream.WritesClosed.get -> System.Threading.Tasks.Task!
+TeeForge.Networking.NamedQuicStreamOptions
+TeeForge.Networking.NamedQuicStreamOptions.Compression.get -> TeeForge.Networking.QuicStreamCompression
+TeeForge.Networking.NamedQuicStreamOptions.NamedQuicStreamOptions(TeeForge.Networking.QuicStreamCompression compression = TeeForge.Networking.QuicStreamCompression.None) -> void
+TeeForge.Networking.QuicRandomAccessChannel
+TeeForge.Networking.QuicRandomAccessChannel.CanReadAt.get -> bool
+TeeForge.Networking.QuicRandomAccessChannel.CanWriteAt.get -> bool
+TeeForge.Networking.QuicRandomAccessChannel.Compression.get -> TeeForge.Networking.QuicStreamCompression
+TeeForge.Networking.QuicRandomAccessChannel.CompressionThreshold.get -> int
+TeeForge.Networking.QuicRandomAccessChannel.MaximumRequestSize.get -> int
+TeeForge.Networking.QuicRandomAccessChannel.Name.get -> string!
+TeeForge.Networking.QuicRandomAccessChannel.ReadAt(System.Span<byte> buffer, long offset) -> int
+TeeForge.Networking.QuicRandomAccessChannel.ReadAtAsync(System.Memory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
+TeeForge.Networking.QuicRandomAccessChannel.WriteAt(System.ReadOnlySpan<byte> buffer, long offset) -> void
+TeeForge.Networking.QuicRandomAccessChannel.WriteAtAsync(System.ReadOnlyMemory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+TeeForge.Networking.QuicRandomAccessOptions
+TeeForge.Networking.QuicRandomAccessOptions.Compression.get -> TeeForge.Networking.QuicStreamCompression
+TeeForge.Networking.QuicRandomAccessOptions.CompressionThreshold.get -> int
+TeeForge.Networking.QuicRandomAccessOptions.QuicRandomAccessOptions(TeeForge.Networking.QuicStreamCompression compression = TeeForge.Networking.QuicStreamCompression.None, int compressionThreshold = 16384) -> void
+TeeForge.Networking.QuicStreamCompression
+TeeForge.Networking.QuicStreamCompression.BrotliFastest = 1 -> TeeForge.Networking.QuicStreamCompression
+TeeForge.Networking.QuicStreamCompression.BrotliOptimal = 2 -> TeeForge.Networking.QuicStreamCompression
+TeeForge.Networking.QuicStreamCompression.None = 0 -> TeeForge.Networking.QuicStreamCompression
+TeeForge.Networking.QuicStreamCompressionAlgorithms
+TeeForge.Networking.QuicStreamCompressionAlgorithms.All = TeeForge.Networking.QuicStreamCompressionAlgorithms.Uncompressed | TeeForge.Networking.QuicStreamCompressionAlgorithms.BrotliFastest | TeeForge.Networking.QuicStreamCompressionAlgorithms.BrotliOptimal -> TeeForge.Networking.QuicStreamCompressionAlgorithms
+TeeForge.Networking.QuicStreamCompressionAlgorithms.BrotliFastest = 2 -> TeeForge.Networking.QuicStreamCompressionAlgorithms
+TeeForge.Networking.QuicStreamCompressionAlgorithms.BrotliOptimal = 4 -> TeeForge.Networking.QuicStreamCompressionAlgorithms
+TeeForge.Networking.QuicStreamCompressionAlgorithms.Uncompressed = 1 -> TeeForge.Networking.QuicStreamCompressionAlgorithms

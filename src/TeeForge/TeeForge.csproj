@@ -8,8 +8,8 @@
     <Version>0.1.0</Version>
     <Authors>Doug Cleghorn</Authors>
     <Copyright>Copyright © 2026 Doug Cleghorn</Copyright>
-    <Description>High-performance .NET streams for mirrored I/O, buffered fan-out, multi-hashing, broadcast pipelines, sparse storage, and HTTP range reads.</Description>
-    <PackageTags>stream;pipe;pipelines;broadcast;tee;raid;io;hash;cryptography;sparse;virtual-disk;random-access;http-range</PackageTags>
+    <Description>High-performance .NET streams for mirrored I/O, buffered fan-out, multi-hashing, broadcast pipelines, sparse storage, HTTP range reads, and mutually authenticated QUIC.</Description>
+    <PackageTags>stream;pipe;pipelines;broadcast;tee;raid;io;hash;cryptography;sparse;virtual-disk;random-access;http-range;quic;mtls</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <PackageIcon>teeforge-icon.png</PackageIcon>

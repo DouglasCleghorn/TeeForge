@@ -1,7 +1,8 @@
 # ErasureCodeStream version-1 format specification
 
-Status: implementation baseline. The format becomes stable only when its binary
-golden vectors and crash matrix pass on every supported runtime architecture.
+Status: experimental version-1 implementation baseline. Golden serialization
+vectors and initial crash-replay tests pass, but the format is not declared
+stable for long-term interchange yet.
 
 This document defines the compatibility boundary for `ErasureCodeStream`. Public
 API naming may evolve before implementation, but an implementation must not write
@@ -28,18 +29,19 @@ requires each member implementation to make that flush durable.
 
 ## Required member capabilities and ownership
 
-Every member must be non-null, unique by object reference, readable, writable,
-seekable, and flushable. All members must permit positioning and length queries.
-Formatting rejects duplicate persistent member identifiers and members too short
-for the selected layout.
+Formatting requires every member to be non-null, unique by object reference,
+empty, readable, writable, seekable, and flushable. Opening requires readable,
+seekable streams; write operation and committed-journal replay additionally
+require a writable quorum. All members must permit positioning and length
+queries.
 
 The supplied order is not persistent identity. Each formatted member carries a
 random member identifier and its current position. Opening accepts members in any
 order and rejects two streams claiming the same member identifier.
 
-The stream owns members unless `LeaveOpen` is selected. Separate caller operations
-are not serialized; callers retain the normal `Stream` single-owner responsibility.
-Internal reads and writes to different members run concurrently.
+The stream owns members unless `LeaveOpen` is selected. The current implementation
+serializes logical caller operations so stripe generation selection and updates do
+not race. Internal reads and writes to different members run concurrently.
 
 ## Numeric and checksum conventions
 
@@ -258,6 +260,7 @@ The shard header layout is:
 | 76 | 4 | Reserved |
 | 80 | 16 | Shard-header hash |
 | 96 | `8 * count` | XXH64 integrity-block checksums |
+| 2144 | 8 | Monotonic transaction sequence that produced this shard |
 | remaining | variable | Reserved zero bytes |
 
 The header hash covers the complete header with bytes 80 through 95 zeroed. Each
@@ -272,10 +275,13 @@ stripe receives its first committed update, its current members carry ordinary
 valid headers. A member that retains an implicit-zero header is then stale for that
 stripe and must be reconstructed before its payload can participate in reads.
 
-The generation UUID is equal across all shards produced by one committed stripe
-transaction. A member with a valid but different generation is stale. A member
-with the expected generation but a failed integrity checksum is corrupt. Neither
-is silently combined with current shards.
+The transaction sequence and generation UUID are equal across all shards produced
+by one committed stripe transaction. The sequence orders generations after
+rotating member failures; the UUID prevents unrelated transactions with a
+coincident sequence from being combined. A member with a lower sequence or a
+different UUID at the selected sequence is stale. A member with the expected
+generation but a failed integrity checksum is corrupt. Neither is silently
+combined with current shards.
 
 ## Logical addressing
 
@@ -418,7 +424,11 @@ Opening performs these steps before ordinary I/O:
 4. Scan the small fixed journal on available configuration members.
 5. Group fragments by transaction identity and reject conflicting identities with
    the same sequence.
-6. Ignore an uncommitted group because no conforming writer began its home writes.
+6. Ignore a prepared group with no valid commit pages because no conforming
+   writer began its home writes. One through `W - 1` visible commit pages are
+   insufficient evidence: unavailable members could contain the rest of a
+   previously committed quorum, so opening stops in a faulted state rather than
+   guessing that the transaction was uncommitted.
 7. Replay committed groups in sequence order. For each affected range, obtain `k`
    valid final fragments from journal after-images, already-current home blocks,
    or unaffected data home blocks; reconstruct missing fragments and write the

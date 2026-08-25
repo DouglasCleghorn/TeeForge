@@ -8,8 +8,9 @@ capabilities such as random-access streams.
 ## Decision
 
 - Organize public types into the shallow feature namespaces
-  `TeeForge.Mirroring`, `TeeForge.Pipelines`, `TeeForge.Hashing`,
-  `TeeForge.RandomAccess`, `TeeForge.Sparse`, and `TeeForge.ErasureCoding`.
+  `TeeForge.Composition`, `TeeForge.Mirroring`, `TeeForge.Pipelines`,
+  `TeeForge.Hashing`, `TeeForge.RandomAccess`, `TeeForge.Sparse`, and
+  `TeeForge.ErasureCoding`.
 - Keep the root `TeeForge` namespace free of public types.
 - Mirror feature boundaries in internal namespaces, such as
   `TeeForge.Pipelines.Internal` and `TeeForge.Sparse.Internal`.

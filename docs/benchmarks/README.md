@@ -18,6 +18,12 @@ Raw transient BenchmarkDotNet artifacts do not replace the curated experiment re
   without hashing. The mixed-family harness and its currently blocked local run
   are retained in
   [the algorithm-family experiment](../../benchmarks/TeeForge.Benchmarks/Experiments/2026-08-23-tee-hash-algorithm-families.md).
+- HandoffStream steady-state sequential and random-access operations remain
+  allocation-free. Direct-stream and equivalent manually synchronized baselines
+  separate the required synchronization cost from HandoffStream delegation at
+  4 KiB, 64 KiB, and 1 MiB, so normal payload throughput is not conflated with
+  handoff transitions. See the retained
+  [steady-state overhead experiment](../../benchmarks/TeeForge.Benchmarks/Experiments/2026-08-24-handoff-stream-overhead.md).
 - Reed-Solomon experiments retain scalar-reference equivalence, zero
   steady-state allocation, and the measured gain from each managed SIMD
   backend. See the retained

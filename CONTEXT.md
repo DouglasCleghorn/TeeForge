@@ -4,6 +4,17 @@ TeeForge provides .NET I/O primitives that distribute one producer's data to mul
 
 ## Language
 
+**Handoff stream**:
+A stable stream endpoint that serializes operations and accepts a caller-created
+replacement stream assumed to have the same final destination. The outgoing
+stream is flushed before the replacement becomes active, without requiring
+callers of the stable endpoint to replace, close, or reconnect it.
+
+**Handoff boundary**:
+The point after an active stream operation completes and before a queued
+operation begins at which a HandoffStream atomically installs a replacement
+stream after flushing the outgoing stream.
+
 **TeeStream**:
 A stream that mirrors operations across an arbitrary set of destination streams and presents them as one stream. An operation is supported only when every destination supports it.
 
@@ -18,6 +29,46 @@ A read/write stream wrapper that anticipates future reads by fetching data beyon
 
 **Random-access stream**:
 A stream with explicit-offset operations over its logical byte sequence. A random-access operation preserves Position and is safe to invoke concurrently, although an implementation may serialize execution and may use an upstream random-access capability when one is available.
+
+**Mutual QUIC connection**:
+An authenticated relationship whose two endpoints load private-key-bearing
+identities from local certificate and PEM key files and pin each other's
+certificate. It owns one QUIC connection and can carry multiple independent
+application streams opened by either endpoint.
+
+**Named QUIC stream**:
+One bidirectional QUIC stream dynamically associated with an application name
+for the lifetime of a mutual QUIC connection. The name appears only in the
+stream-opening handshake; QUIC assigns the physical stream ID used by the
+transport. At most one live stream pair has a given name on a connection.
+
+**Named-stream collision**:
+Two endpoints attempting to open the same named QUIC stream concurrently. The
+client-initiated stream wins deterministically, the server-initiated attempt is
+rejected, and an already active name rejects later attempts until its stream is
+disposed.
+
+**QUIC stream compression**:
+Transparent compression selected by the opener for one named QUIC stream and
+accepted only when permitted by the receiving connection. The opening handshake
+is uncompressed; after negotiation, the selected algorithm applies to all
+payload bytes in both directions using independent compression contexts.
+
+**QUIC random-access service**:
+A connection-level service that exposes a caller-owned ITeeRandomAccessStream
+to its peer independently of named sequential streams. Each positional request
+uses its own short-lived bidirectional QUIC stream so requests can progress and
+fail independently.
+
+**QUIC random-access compression threshold**:
+The minimum uncompressed request or response payload size at which a negotiated
+random-access compression algorithm is applied. Smaller positional payloads
+remain uncompressed.
+
+**QUIC random-access request**:
+An explicit-offset read or write carried on its own bidirectional QUIC
+stream, separate from every named sequential stream. A negotiated short service
+handle identifies the caller-owned ITeeRandomAccessStream that services it.
 
 **HTTP random-access stream**:
 A read-only stream whose backing bytes are retrieved with HTTP byte-range requests. It remains a thin transport; caching and speculative prefetch belong to a read-ahead wrapper.
@@ -171,6 +222,24 @@ The block-aligned end of the highest logical block that is live in either the di
 
 **Erased block**:
 A differencing-stream block state that represents logical zeroes and prevents reads from falling through to the base stream. It is distinct from an absent child block, which inherits its contents from the base.
+
+**Presence grain**:
+The fixed 4 KiB logical unit for which a partially present differencing block selects either child data or inherited base data. Presence grains and every physical structure containing them begin at 4 KiB-aligned offsets.
+
+**Differencing block state**:
+The BAT-encoded source of one logical block: inherited blocks read from the base, erased blocks read as zeroes, fully present blocks read from the difference stream, and partially present blocks select the difference stream or base independently for each presence grain.
+
+**Differencing trim**:
+An absolute logical range discard that deterministically reads as zero and never exposes inherited base data. It does not extend logical length or change Position, and trimming live tail blocks may reduce logical length.
+
+**Data write identifier**:
+A persistent identifier for one version of a stream's caller-visible logical byte sequence. It changes before the first logical mutation of a writable open but not when compaction changes only physical layout, allowing a differencing stream to reject a modified base.
+
+**Presence region**:
+A lazily allocated, block-sized differencing metadata region containing one presence bit per 4 KiB logical grain. In a partially present block, a set bit selects child data and a clear bit selects inherited base data.
+
+**Dependent stream registration**:
+Advisory upstream metadata recording the identifier of a known differencing child. A differencing-stream creation option may request registration, but ordinary differencing I/O never mutates the base and registration does not change its caller-visible logical data identity.
 
 **ErasureCodeStream**:
 A readable, writable, seekable logical stream whose data is distributed across an erasure set using systematic Reed-Solomon coding. It can reconstruct unavailable member data while enough members remain.

@@ -80,7 +80,7 @@ try {
         throw "Unexpected package authors '$($metadata.authors)'."
     }
 
-    $expectedDescription = "High-performance .NET streams for mirrored I/O, buffered fan-out, multi-hashing, broadcast pipelines, sparse storage, and HTTP range reads."
+    $expectedDescription = "High-performance .NET streams for mirrored I/O, buffered fan-out, multi-hashing, broadcast pipelines, sparse storage, HTTP range reads, and mutually authenticated QUIC."
     if ($metadata.description -ne $expectedDescription) {
         throw "Unexpected package description '$($metadata.description)'."
     }

@@ -4,6 +4,21 @@ All notable changes to TeeForge are documented here.
 
 ## [Unreleased]
 
+- Add `HandoffStream`, a stable serialized endpoint that hands operations off
+  to a caller-supplied stream with the same final destination, including
+  `ITeeRandomAccessStream` support through native or serialized seek fallback.
+- Add `MutualQuicConnection` and `MutualQuicConnectionListener` with local PEM
+  identities, mandatory peer-certificate pinning, dynamic `NamedQuicStream`
+  pairs, opener-selected transparent Brotli compression, and named
+  `QuicRandomAccessChannel` services using threshold-compressed independent
+  request streams.
+- Add the public fixed-capacity `ErasureCodeStream` with self-describing member
+  headers, SIMD systematic Reed-Solomon coding, degraded reads and writes,
+  bounded journaled stripe updates, committed-write replay, per-member sampled
+  performance telemetry, state and maintenance callbacks, and configurable
+  consistency checks. Online repair, member replacement, and reshape operations
+  remain future work.
+
 ## [0.1.0] - 2026-08-23
 
 - Organize public APIs into shallow feature namespaces and name the
@@ -27,8 +42,10 @@ All notable changes to TeeForge are documented here.
   owns the shared buffer size for `TeeBufferedStream` and `TeeHashStream`.
 - Begin the `ErasureCodeStream` version-1 implementation with a documented
   on-media format, bounded stripe redo-journal design, managed scalar/AVX2/SSSE3
-  Reed-Solomon codec, and checksummed A/B member-superblock serialization. The
-  public stream API remains under development.
+  Reed-Solomon codec, checksummed A/B member superblocks, stable configuration
+  records, shard headers, journal prepare/commit pages, conservative quorum
+  grouping, and block-granular replay reconstruction. The usable stream API
+  remains under development.
 - Add the MIT-licensed .NET 10 `System.IO.Hashing` package as the sole runtime
   NuGet dependency for XXH128 member-header checksums.
 

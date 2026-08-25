@@ -1,6 +1,6 @@
 # TeeForge 0.1 specification
 
-Status: accepted for implementation on 2026-08-22; updated on 2026-08-23.
+Status: accepted for implementation on 2026-08-22; updated on 2026-08-24.
 
 ## Package
 
@@ -8,8 +8,9 @@ Status: accepted for implementation on 2026-08-22; updated on 2026-08-23.
 - Version: `0.1.0`.
 - Target framework: `net10.0` only.
 - Public namespaces are organized by stable feature family:
-  `TeeForge.Mirroring`, `TeeForge.Pipelines`, `TeeForge.Hashing`,
-  `TeeForge.RandomAccess`, `TeeForge.Sparse`, and `TeeForge.ErasureCoding`.
+  `TeeForge.Composition`, `TeeForge.Mirroring`, `TeeForge.Pipelines`,
+  `TeeForge.Hashing`, `TeeForge.RandomAccess`, `TeeForge.Networking`,
+  `TeeForge.Sparse`, and `TeeForge.ErasureCoding`.
 - The root `TeeForge` namespace contains no public types. Consumers import only
   the feature families they use.
 - License: MIT.
@@ -18,6 +19,49 @@ Status: accepted for implementation on 2026-08-22; updated on 2026-08-23.
   `System.IO.Hashing`, used for the persisted XXHash checksums.
 - The package contains XML documentation, portable symbols, Source Link data,
   README, changelog, license, and third-party notices.
+
+## HandoffStream
+
+`HandoffStream` is a stable `Stream` endpoint over a replaceable current stream.
+Construction takes the initial stream and an optional `leaveOpen` value that
+defaults to `false`. Capabilities are read from the current stream and may
+change after a handoff; they report false after disposal.
+
+All ordinary stream operations, disposal, and handoffs share one asynchronous
+gate. A handoff waits for the active operation to finish, flushes the outgoing
+stream, installs the supplied replacement atomically, and allows queued
+operations to continue against the replacement. The replacement is assumed to
+have the same final destination. No operation spans both streams. This
+serialization makes handoffs deterministic for streams whose reads, writes,
+and seeks share one position.
+
+The public handoff API is:
+
+```csharp
+void Handoff(Stream stream)
+ValueTask HandoffAsync(
+    Stream stream,
+    CancellationToken cancellationToken = default)
+```
+
+The caller constructs the replacement before handing it in; for example, it may
+construct a `System.IO.BufferedStream` over the shared destination. The outgoing
+stream is not disposed during handoff. Its replacement or the caller retains
+responsibility for its lifetime. If the outgoing flush fails or an asynchronous
+wait is canceled, it remains current. Supplying `null` or the `HandoffStream`
+itself is rejected.
+
+`HandoffStream` implements `ITeeRandomAccessStream`. It delegates explicit-
+offset operations to a native current capability when available. A seekable
+current stream instead uses a serialized save/seek/operate/restore fallback,
+which preserves `Position` and keeps random access available after handing off
+to a standard `System.IO.BufferedStream`. `CanReadAt` and `CanWriteAt` reflect
+the current native or fallback capability.
+
+Synchronous and asynchronous disposal wait for any active operation. Unless
+`leaveOpen` is true, disposal cascades through the current stream. When
+`leaveOpen` is true the current stream is flushed and remains open. Streams
+retired by earlier handoffs are never disposed by `HandoffStream`.
 
 ## TeeStream
 
@@ -154,8 +198,8 @@ The HTTP leaf intentionally does not preload or cache. A future adaptive
 read-ahead/cache layer should consume `ITeeRangeReadSource`, initially reserve a
 large range (the current design target is 4 MiB), expose progressively filled
 prefixes, coalesce overlapping readers, and grow its reservation only after
-sustained consumption. The future public ErasureCodeStream should likewise
-translate this same logical capability at its member-I/O boundary.
+sustained consumption. `ErasureCodeStream` likewise translates this logical
+capability at its member-I/O boundary when a member implements it.
 
 ## TeeBufferedStream
 
@@ -362,11 +406,75 @@ reader completion task still retains its own exception.
 - synchronization-context capture enabled;
 - reader-failure behavior `Continue`.
 
+## Mutual QUIC connections
+
+`MutualQuicConnectionListener` accepts authenticated connections, and
+`MutualQuicConnection` opens, accepts, and dispatches every application stream
+on one `System.Net.Quic.QuicConnection`. Both endpoints may initiate streams.
+The client performs a short version handshake after TLS and ALPN negotiation;
+the connection then owns one inbound accept pump so named streams, service
+negotiation, and positional requests cannot compete for native accepts.
+
+`MutualQuicConnectionOptions` requires three existing local files: an X.509
+certificate PEM, its matching unencrypted private-key PEM, and the peer
+certificate to trust in PEM or DER form. Both endpoints present certificates,
+pin the SHA-256 hash of the complete peer certificate, and check its validity
+period. TLS proves possession of the associated private key. On Windows, the
+PEM key is re-imported through a temporary persisted PKCS#12 key container
+because Schannel/MsQuic cannot authenticate with an ephemeral private key.
+
+### Named streams
+
+`OpenStreamAsync` dynamically reserves a nonempty application name of at most
+255 UTF-8 bytes and opens one native bidirectional QUIC stream. Its uncompressed
+opening preface carries the protocol version, stream kind, selected compression,
+and name. The receiver validates the preface, reserves the name, acknowledges
+the selection, and publishes the resulting `NamedQuicStream` through
+`AcceptStreamAsync`. QUIC's native `NamedQuicStream.Id` distinguishes the
+physical stream, so no second application identifier follows the preface.
+
+Only one live pair owns a name. An active duplicate is rejected at stream scope.
+If both endpoints reserve an unused name concurrently, the client-initiated
+stream wins and the server attempt fails. Disposing the winning pair releases
+the name for reuse. Pending accepted streams and concurrent inbound streams are
+bounded independently by connection options.
+
+`NamedQuicStream` is a non-seekable `Stream` and `IDuplexPipe`. Reads serialize
+with reads; writes, flushes, compression finalization, and write completion
+serialize with writes. One read and one write remain concurrent. Callers choose
+one access surface per direction because direct stream operations and pipe
+operations consume the same sequence.
+
+The opener selects `None`, `BrotliFastest`, or `BrotliOptimal`; the receiver's
+`AllowedCompressions` policy accepts or rejects the exact selection. Named-stream
+compression is transparent and applies to every payload byte after the preface,
+using separate read and write contexts. `Flush` flushes the compressor and
+`CompleteWrites` finalizes it before half-closing QUIC. Compression contexts are
+never shared across native streams.
+
+### Random-access services
+
+`RegisterRandomAccess` associates a dynamic service name with a caller-owned,
+thread-safe `ITeeRandomAccessStream`; unregistering or disposing the connection
+does not dispose the backing capability. `OpenRandomAccessAsync` negotiates the
+name, positional capabilities, compression, threshold, maximum request size,
+and a short connection-local handle, returning a `QuicRandomAccessChannel`.
+
+Each `ReadAt` or `WriteAt` uses a new bidirectional QUIC stream containing the
+handle, operation, offset, and bounded lengths. There is deliberately no pool
+of reusable request streams: independent streams retain independent ordering,
+flow control, cancellation, and failure. A request or actual response payload
+whose uncompressed length is at least `CompressionThreshold` uses the channel's
+negotiated compression; smaller payloads remain uncompressed. The default
+threshold is 16 KiB and the default maximum operation size is 1 MiB.
+
 ## Verification
 
 - Unit tests cover API validation, consistency, exception aggregation,
   cancellation, ownership, buffered I/O and seeking, broadcast delivery,
-  cursor independence, backpressure, completion, failure modes, and reset.
+  cursor independence, backpressure, completion, failure modes, reset, QUIC
+  mutual authentication, duplex I/O, same-direction serialization, and
+  multiplexed random access.
 - Stress tests randomize independent reader progress and cancellation.
 - An AOT smoke application is published in CI.
 - Package contents and runtime dependency metadata are tested.
@@ -411,11 +519,33 @@ allocation strategy, and compatibility policy are normative in
 
 ## ErasureCodeStream
 
-`ErasureCodeStream` is under development for a later 0.1 prerelease milestone
-and is not yet a public API. The format constants, managed SIMD Reed-Solomon
-codec, and checksummed A/B member-superblock serializer are implemented; the
-member I/O coordinator, journal replay, and public state and maintenance APIs
-remain in progress.
+`ErasureCodeStream` is a public fixed-capacity, readable, writable, seekable
+`Stream` and `ITeeRandomAccessStream`. `Create` formats exactly `k + m` empty,
+unique, readable, writable, seekable member streams. `Open` accepts at least `k`
+valid members in any supplied order, discovers their persistent positions, and
+replays any committed non-checkpointed journal transaction before returning.
+Read-only open is supported when no transaction needs replay.
+
+The implementation serializes logical operations while it issues independent
+member I/O concurrently. Positional `ReadAt` and `WriteAt` do not change
+`Position`. Capacity is fixed by the stable configuration, so `SetLength` and
+seeks beyond `[0, Length]` are rejected. A canceled write is abandoned only
+before its commit quorum; after commitment it completes or recovers without
+using the caller cancellation token.
+
+`GetState` returns immutable aggregate and per-member snapshots. The member
+performance snapshot contains exact byte, operation, reconstruction, and error
+counters plus deterministically sampled latency, throughput, maximum latency,
+and histogram buckets. `RegisterStateChangeHandler` and
+`RegisterMaintenanceHandler` queue observer functions and isolate observer
+exceptions from storage operations.
+
+`CheckConsistencyAsync` validates every current header and 64 KiB integrity
+block. `ErasureMaintenanceOptions` selects foreground, yielding balanced, or
+delayed background scheduling and an optional bytes-per-second limit. The check
+reports corrupt, stale, and missing positions but does not yet repair them.
+Member replacement, repair, capacity expansion, and parity reshaping are future
+operations.
 
 See [the ErasureCodeStream overview](erasure-code-stream.md) for the safety
 model and current status. Its proposed version-1 media format, quorum behavior,

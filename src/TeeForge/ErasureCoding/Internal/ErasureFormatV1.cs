@@ -16,6 +16,19 @@ internal static class ErasureFormatV1
     internal const int MaximumMemberCount = 255;
     internal const int ShardHeaderSize = PageSize;
     internal const int JournalEnvelopeSize = PageSize * 2;
+    internal const ushort ReedSolomonCodecId = 1;
+    internal const ushort StableConfigurationRecordType = 1;
+    internal const ushort StableConfigurationRecordVersion = 1;
+    internal const ushort StableConfigurationCriticalFlag = 1;
+    internal const int StableConfigurationHeaderSize = 256;
+    internal const int MemberDescriptorSize = 64;
+    internal const int ShardChecksumOffset = 96;
+    internal const int ShardTransactionSequenceOffset =
+        ShardChecksumOffset + (MaximumShardSize / IntegrityBlockSize * sizeof(ulong));
+    internal const int JournalRangeDescriptorOffset = 256;
+    internal const int JournalRangeDescriptorSize = 16;
+    internal const int MaximumJournalRangeCount = 128;
+    internal const uint MemberStateFormatComplete = 1;
 
     internal static ReadOnlySpan<byte> MemberMagic => "TeeEC\r\n\u001a"u8;
 
@@ -87,6 +100,16 @@ internal static class ErasureFormatV1
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(stripeCount);
 
         return checked(stripeCount * dataShardCount * (long)shardSize);
+    }
+
+    internal static int CalculateStableConfigurationRecordLength(int memberCount)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(memberCount, 3);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(memberCount, MaximumMemberCount);
+
+        return checked((int)AlignUp(
+            StableConfigurationHeaderSize + (long)memberCount * MemberDescriptorSize,
+            PageSize));
     }
 
     private static void ValidateCounts(int dataShardCount, int parityShardCount)
