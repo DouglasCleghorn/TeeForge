@@ -69,6 +69,7 @@ var dynamicOptions = new DynamicAllocationStreamOptions(
 await using var dynamicBacking = new MemoryStream();
 await using (DynamicAllocationStream created = await DynamicAllocationStream.CreateAsync(
     dynamicBacking,
+    16L * 64 * 1024,
     64 * 1024,
     dynamicOptions))
 {
@@ -91,6 +92,31 @@ await using (DynamicAllocationStream opened = await DynamicAllocationStream.Open
     if (!dynamicResult.AsSpan().SequenceEqual(payload))
     {
         return 6;
+    }
+
+    var differenceOptions = new DifferencingStreamOptions(
+        leaveBaseOpen: true,
+        leaveDifferenceOpen: true);
+    await using var differenceBacking = new MemoryStream();
+    await using (DifferencingStream child = await DifferencingStream.CreateAsync(
+        opened,
+        differenceBacking,
+        differenceOptions,
+        "base.tfdisk"))
+    {
+        await child.WriteAtAsync(new byte[] { 9, 8 }, 4095);
+        byte[] differenceResult = new byte[2];
+        if (await child.ReadAtAsync(differenceResult, 4095) != 2 ||
+            !differenceResult.AsSpan().SequenceEqual(new byte[] { 9, 8 }))
+        {
+            return 7;
+        }
+
+        DifferencingStreamLocator locator = await DifferencingStream.ReadLocatorAsync(differenceBacking);
+        if (locator.BaseId != opened.Id || locator.ParentPathHint != "base.tfdisk")
+        {
+            return 8;
+        }
     }
 }
 

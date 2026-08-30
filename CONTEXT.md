@@ -15,6 +15,27 @@ The point after an active stream operation completes and before a queued
 operation begins at which a HandoffStream atomically installs a replacement
 stream after flushing the outgoing stream.
 
+**Migrating stream**:
+A stable readable, writable, seekable endpoint that copies a logical byte
+sequence from a source stream to a destination stream in bounded background
+quanta while foreground I/O remains available.
+
+**Migrated prefix**:
+The contiguous logical range beginning at offset zero that a MigratingStream
+has copied to its destination. Reads in this range use the destination while
+reads beyond it use the source until migration completes.
+
+**Migration quantum**:
+One bounded source-read and destination-write phase. It completes atomically
+with respect to serialized foreground operations; queued foreground operations
+run before the next quantum begins.
+
+**Migration handoff**:
+A HandoffStream transition that installs a MigratingStream over its current
+source before copying starts and installs the destination after successful
+migration. Failure restores the source unless the destination had already
+become authoritative before optional source cleanup failed.
+
 **TeeStream**:
 A stream that mirrors operations across an arbitrary set of destination streams and presents them as one stream. An operation is supported only when every destination supports it.
 
@@ -176,10 +197,10 @@ An immutable completed hash value keyed by an enum algorithm identifier, with im
 A stable, externally read-only dictionary from enum algorithm identifiers to TeeHashResult<TAlgorithm> values. TeeHashResults<TeeHashAlgorithm> supports mixed cryptographic and non-cryptographic algorithms and uses the same empty-until-complete, atomic-publication contract as the existing non-generic TeeHashResults.
 
 **Dynamic allocation stream**:
-A logical stream with a maximum addressable capacity of `long.MaxValue` whose bytes are stored in fixed-size physical blocks allocated on first write. Its length is the block-aligned end of the highest logical block that still represents live data, capped at `long.MaxValue`. Reading an unallocated block below that length returns zeroes without allocating storage.
+A logical stream with a positive, immutable, 4 KiB-aligned virtual capacity whose bytes are stored in fixed-size physical blocks allocated on first write. Its length is the block-aligned end of the highest logical block that still represents live data, capped at the virtual capacity. Reading an unallocated block below that length returns zeroes without allocating storage.
 
 **Dynamic logical length**:
-The cached exclusive block-end offset of the highest logical block that still represents live data, capped at `long.MaxValue`. Reads at or beyond it return end-of-stream; unwritten bytes and sparse gaps below it return zeroes. Trim and zero-block reclamation can reduce it, and recovery can recompute it from replayed allocation and trim metadata.
+The cached exclusive block-end offset of the highest logical block that still represents live data, capped at `VirtualCapacity`. Reads at or beyond it return end-of-stream; unwritten bytes and sparse gaps below it return zeroes. Trim and zero-block reclamation can reduce it, and recovery can recompute it from replayed allocation and trim metadata.
 
 **Block allocation table (BAT)**:
 A persistent array of 64-bit entries that maps logical block indexes to absolute, block-aligned byte offsets in the underlying stream. A zero entry means that the logical block is unallocated. BAT storage is allocated lazily in block-sized regions and existing BAT entries are updated in place.
@@ -218,7 +239,7 @@ The logical byte sequence inherited by a differencing stream. A persistent base 
 The persistent child storage containing a differencing stream's private changes and the metadata that locates them.
 
 **Differencing logical length**:
-The block-aligned end of the highest logical block that is live in either the difference stream or its inherited base, capped at `long.MaxValue`. An erased child block masks the corresponding base block and does not count as live.
+The block-aligned end of the highest logical block that is live in either the difference stream or its inherited base, capped by immutable virtual capacity. An erased child block masks the corresponding base block and does not count as live.
 
 **Erased block**:
 A differencing-stream block state that represents logical zeroes and prevents reads from falling through to the base stream. It is distinct from an absent child block, which inherits its contents from the base.
@@ -235,11 +256,38 @@ An absolute logical range discard that deterministically reads as zero and never
 **Data write identifier**:
 A persistent identifier for one version of a stream's caller-visible logical byte sequence. It changes before the first logical mutation of a writable open but not when compaction changes only physical layout, allowing a differencing stream to reject a modified base.
 
-**Presence region**:
-A lazily allocated, block-sized differencing metadata region containing one presence bit per 4 KiB logical grain. In a partially present block, a set bit selects child data and a clear bit selects inherited base data.
+**Differencing state record**:
+An immutable, checksummed, allocation-block-sized child metadata record containing one logical block's VHDX-numbered BAT value and 4 KiB presence bitmap. Redundant roots select an append-only record tail, making payload-plus-record publication recoverable without the dynamic format's in-place metadata journal.
 
 **Dependent stream registration**:
-Advisory upstream metadata recording the identifier of a known differencing child. A differencing-stream creation option may request registration, but ordinary differencing I/O never mutates the base and registration does not change its caller-visible logical data identity.
+Advisory upstream metadata recording the stable identifier of a known immediate differencing child. A differencing-stream creation option may request registration, but ordinary differencing I/O never mutates the base; registrations may become stale, do not prevent upstream writes, and do not change the base's caller-visible logical data identity.
+
+**Base identity validation**:
+The creation- or open-time comparison of a differencing stream's recorded base identifier and data write identifier with the supplied base. Validation is not continuously repeated; mutating the base during the child wrapper's lifetime violates its ownership contract.
+
+**Stream identity**:
+The stable stream identifier and current data write identifier exposed together by an identity-capable stream. TeeForge block streams provide this identity directly, while callers supply it for other base-stream types.
+
+**TeeForge disk image**:
+A mountable sparse virtual-disk image stored with the `.tfdisk` extension and interpreted by `DynamicAllocationStream`. Its caller-visible stream length remains allocation-derived while its persisted virtual capacity supplies the stable disk size presented to an operating system.
+
+**TeeForge difference image**:
+A mountable differencing virtual-disk image stored with the `.tfdiff` extension and interpreted by `DifferencingStream`. A writable leaf may inherit through a read-only chain of TeeForge disk or difference images with matching identity and geometry.
+
+**Virtual capacity**:
+The positive, immutable, persisted, 4 KiB-aligned disk size advertised by a mount host. It is distinct from allocation-derived stream length, is shared by every member of a differencing chain, bounds reads, writes, and trims, and is required when a TeeForge disk image is created.
+
+**Parent locator hint**:
+An optional relative path stored by a difference image to help a mount tool find its immediate base. The hint is not identity; a located candidate must still match the recorded base identifier and data write identifier.
+
+**Mount broker**:
+A separate user-mode host that translates Windows block-device requests into TeeForge random-access, trim, and flush operations. Version-one mounting runs one broker process per session-scoped data-disk mount; the broker contains no disk-format implementation, so all sparse allocation, differencing, chaining, journaling, and recovery remain in the TeeForge library.
+
+**Deferred Storport driver**:
+The intended signed Windows 11 virtual-storage miniport that will expose TeeForge images as native SCSI direct-access disks while delegating every format and logical-I/O operation to the user-mode mount broker. Implementation is deferred; the current ImDisk transport is a non-shipping prototype, and the future driver must remain format-agnostic.
+
+**Session-scoped data-disk mount**:
+A Windows mount that lasts only for the current operating-system session and is intended for ordinary data volumes. It is not automatically restored after reboot and is unsupported for boot, system, pagefile, hibernation, or crash-dump storage.
 
 **ErasureCodeStream**:
 A readable, writable, seekable logical stream whose data is distributed across an erasure set using systematic Reed-Solomon coding. It can reconstruct unavailable member data while enough members remain.
@@ -248,7 +296,19 @@ A readable, writable, seekable logical stream whose data is distributed across a
 The complete collection of member streams that jointly stores one ErasureCodeStream.
 
 **Member stream**:
-A readable, writable, seekable underlying stream that occupies one persistent position in an erasure set and stores either data or parity shards.
+A readable, writable, seekable underlying stream with one stable identity and member slot in an erasure set. Its codeword position can differ by extent and stripe.
+
+**Member slot**:
+The stable set-relative index of one physical member identity. A member slot does not imply a permanent data or parity role.
+
+**Declared member capacity**:
+The caller-supplied and persisted maximum physical length that an erasure member may use. The allocator never infers additional usable capacity from filesystem free space or an underlying stream's ability to grow.
+
+**Codeword position**:
+One systematic-data or parity row in an extent's Reed-Solomon codeword before the extent's placement mapping assigns that row to a physical member slot.
+
+**Distributed parity**:
+A persisted deterministic placement mapping that rotates codeword positions across physical member slots by stripe, distributing systematic-data and parity traffic without changing the Reed-Solomon codeword.
 
 **Data shard**:
 One systematic Reed-Solomon portion of a stripe that contains logical stream bytes directly.
@@ -260,10 +320,66 @@ One Reed-Solomon portion of a stripe computed from its data shards and used to r
 The configured, power-of-two number of payload bytes stored by each member for one stripe. It is persisted as part of the erasure-set format.
 
 **Logical capacity**:
-The fixed seekable length exposed by one erasure-set configuration. It changes only when a reshape publishes a new configuration.
+The seekable length exposed by the currently published erasure-set configuration. It increases atomically when capacity expansion publishes another allocation extent and may otherwise change only through an explicit migration or reshape.
+
+**Set encoding parameters**:
+The codec family, finite-field convention, shard size, and integrity-block size shared by every allocation extent in one erasure set. Changing them requires set migration.
+
+**Extent geometry**:
+An allocation extent's data- and parity-shard counts, member/codeword placement mapping, stripe count, logical range, and physical member regions under the set's immutable encoding parameters.
+
+**Allocation extent**:
+A contiguous logical range whose physical member regions, member mapping, and erasure-code geometry remain fixed after publication. One ErasureCodeStream may append allocation extents with different geometries so capacity can grow without rewriting earlier extents.
+
+**Capacity expansion**:
+An asynchronous maintenance operation that reserves and publishes another allocation extent. Publication atomically increases logical capacity; existing extents and their stored payloads do not change.
+
+**Extent publication**:
+The durable configuration-generation commit that makes a prepared allocation extent authoritative, exposes its logical range as initialized zeroes, and atomically increases ErasureCodeStream length.
+
+**Stripe activation map**:
+A replicated persistent bitmap with one bit per logical stripe in an allocation extent. An unset bit makes the stripe authoritative zeroes without consulting its physical shard regions; the first committed write publishes complete member headers before setting the bit.
+
+**Set migration**:
+A maintenance operation that copies an erasure set's logical byte sequence into a separately formatted, disjoint target set. The source remains authoritative until the complete target has been validated and selected by the caller.
 
 **Reshape**:
-A maintenance operation that migrates an erasure set to a new data-member or parity-member count, thereby changing capacity or resiliency.
+A maintenance operation that re-encodes an existing logical range under a different extent geometry. It is distinct from append-only capacity expansion and from copying into a disjoint target set.
+
+**In-place reshape**:
+A reshape that progressively converts overlapping member storage from a source geometry to a target geometry without retaining a complete second copy of the set.
+
+**Reshape intent**:
+A persistent maintenance record that names the source and target geometries, conversion direction, aligned conversion quantum, and committed conversion frontier for one resumable in-place reshape.
+
+**Conversion frontier**:
+The durable logical boundary between ranges already governed by an in-place reshape's target geometry and ranges still governed by its source geometry.
+
+**Conversion quantum**:
+The smallest logical range whose boundaries align with complete stripes in both the source and target geometries. An in-place reshape durably journals and converts one such range before advancing its conversion frontier.
+
+**Reshape plan**:
+A non-mutating feasibility result that reports an in-place reshape's conversion direction and quantum, read and write estimates, per-member capacity and journal requirements, and whether its overlapping write order is provably safe.
+
+**Paused maintenance intent**:
+A persistent mutating maintenance intent stopped at a durable operation boundary by cancellation, disposal, or a recoverable member loss. Opening finishes any already journaled quantum, keeps the intent paused, and requires an explicit resume rather than rollback.
+
+**Heal**:
+A maintenance operation that rewrites damaged or stale shard ranges to the same available member stream at its existing persistent position.
+
+**Rebuild**:
+A maintenance operation that populates a newly supplied member stream for one persistent position from the surviving current shards.
+
+**Member replacement**:
+The complete operation that introduces a new member identity at an existing persistent position and rebuilds its shard contents.
+
+**Replacement intent**:
+A persistent maintenance record naming the source and target configurations, persistent position, and new member identity for one resumable member replacement.
+
+**Provisional member**:
+A replacement member named by a replacement intent that participates in foreground updates only for stripes whose current-generation shard it has already published. It becomes an ordinary member when the target stable configuration is published.
+
+_Avoid: repair, when heal, rebuild, member replacement, or reshape is intended._
 
 **Stripe journal**:
 A bounded persistent recovery area that makes interrupted in-place stripe updates replayable without retaining general write history.
@@ -273,3 +389,12 @@ The identifier shared by the data and parity shards produced by one committed up
 
 **Integrity block**:
 The independently checksummed, read-modify-write portion of a shard. Partial writes are expanded to integrity-block boundaries before parity and checksums are updated.
+
+**Codeword inconsistency**:
+A stripe-generation block whose individually valid shards do not satisfy the configured Reed-Solomon relationship. It is localized when valid systematic data identifies disagreeing parity members; otherwise its source is unknown.
+
+**Consistency finding**:
+One consistency-check result identifying a stripe and integrity-block offset together with the implicated member positions, or recording that a codeword inconsistency could not be localized.
+
+**Consistency check**:
+A non-mutating maintenance operation that validates current member metadata, integrity blocks, and Reed-Solomon codewords. It may update volatile member condition and report bounded findings, but it never rewrites stored shards.

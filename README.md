@@ -2,9 +2,9 @@
 
 ![TeeForge icon](assets/teeforge-icon.png)
 
-High-performance .NET 10 streams for live composition, mirrored I/O, buffered
-fan-out, multi-hashing, broadcast pipelines, sparse storage, HTTP range reads,
-and mutually authenticated QUIC.
+High-performance .NET 10 streams for live composition, mirrored I/O,
+write-only replication, buffered fan-out, multi-hashing, broadcast pipelines,
+sparse storage, HTTP range reads, and mutually authenticated QUIC.
 
 TeeForge gives ordinary `Stream` and `System.IO.Pipelines` code explicit tools
 for sending one byte sequence to multiple destinations, checking that mirrored
@@ -36,15 +36,20 @@ With NuGet Central Package Management:
 | Namespace and API | Use it for |
 | --- | --- |
 | `TeeForge.Composition.HandoffStream` | Inserting wrappers such as `System.IO.BufferedStream` into a live stream pipeline |
+| `TeeForge.Composition.MigratingStream` | Moving a live readable and writable byte sequence to a replacement backing stream |
 | `TeeForge.Mirroring.TeeStream` | Mirroring one logical stream across multiple destinations with consistency checks |
+| `TeeForge.Mirroring.ReplicaStream` | Replicating a forward-only write sequence to multiple writable destinations |
 | `TeeForge.Mirroring.TeeBufferedStream` | Coalescing logical I/O once before mirrored fan-out |
 | `TeeForge.Hashing.TeeHashStream` | Writing to destinations while calculating one or more cryptographic hashes or fast checksums |
 | `TeeForge.Pipelines.TeePipe` | Broadcasting one writer's complete byte sequence to a fixed set of independent readers |
 | `TeeForge.Sparse.DynamicAllocationStream` | Storing a very large sparse logical stream in an on-demand block layout |
+| `TeeForge.Sparse.DifferencingStream` | Overlaying grain-level writes and trim on an immutable sparse-disk parent chain |
 | `TeeForge.RandomAccess.ITeeRandomAccessStream` | Reading or writing at explicit offsets without changing `Position` |
 | `TeeForge.RandomAccess.ITeeRangeReadSource` | Opening independent, bounded streams over logical ranges |
+| `TeeForge.RandomAccess.RandomAccessMemoryStream` | Thread-safe positional I/O over an in-memory byte sequence |
 | `TeeForge.RandomAccess.HttpRandomAccessStream` | Reading large HTTP resources through resilient byte-range requests |
 | `TeeForge.Networking.MutualQuicConnection` | Mutually authenticated named streams and positional services over one QUIC connection |
+| `TeeForge.Networking.MultipathSenderStream` / `MultipathReceiverStream` | Mirroring, striping, or erasure-coding one directional byte stream across changing network paths |
 
 All shipped public APIs include XML documentation for IntelliSense. The
 package is marked as trim-compatible and Native AOT-compatible.
@@ -75,6 +80,84 @@ sequence cannot be split across the old and new streams. `HandoffStream` also
 implements `ITeeRandomAccessStream`; native positional I/O is preserved, and a
 serialized seek/restore fallback keeps random access available through standard
 seekable wrappers such as `BufferedStream`.
+
+## Move a live stream to new storage
+
+`MigratingStream` copies a complete seekable byte sequence from a source to a
+destination without taking the logical stream offline. Reads use the migrated
+destination prefix or the authoritative source suffix. Writes go source-first
+to both backings while migration is active. Each background chunk releases the
+operation gate, and any queued caller operations run before the next chunk.
+
+```csharp
+using TeeForge.Composition;
+
+await using var source = File.Open("current.bin", FileMode.Open, FileAccess.ReadWrite);
+await using var destination = File.Open("replacement.bin", FileMode.Create, FileAccess.ReadWrite);
+await using var stream = new MigratingStream(
+    source,
+    destination,
+    new MigratingStreamOptions(bufferSize: 1024 * 1024));
+
+await stream.WriteAtAsync([1, 2, 3], offset: 4096); // Takes priority over the next chunk.
+await stream.MigrationCompletion;                   // Destination is now authoritative.
+```
+
+Both backings must be distinct readable, writable, seekable streams. Migration
+starts at offset zero and does not use or change either backing stream's
+`Position`. A migration failure or cancellation leaves the wrapper operating
+against the source. The destination becomes the sole backing after successful
+copy and flush. Source truncation is explicit through
+`truncateSourceOnCompletion`; generic streams cannot delete their underlying
+storage. Independent leave-open options control ownership.
+
+An existing `HandoffStream` can own the complete transition. Its current stream
+becomes the migration source, the live migrating wrapper is installed before
+copying begins, and the destination is installed after successful copy and
+flush:
+
+```csharp
+await using var live = new HandoffStream(source);
+await live.MigrateAsync(destination, new MigratingStreamOptions(
+    bufferSize: 1024 * 1024));
+```
+
+Reads and writes through `live` remain available throughout. Failure or
+cancellation restores the original source. Destination ownership transfers to
+`HandoffStream` after success, so its `LeaveOpen` setting controls final
+destination disposal. The migration options control whether the retired source
+is disposed and whether a partial destination is disposed after failure.
+
+## Quick start: replicate writes
+
+`ReplicaStream` is a write-only, forward-only fan-out stream. Every write and
+flush is attempted on every replica; reads, seeks, length, position, and
+set-length are deliberately unsupported. Replicas may therefore be pipes,
+network request bodies, hash sinks, append-only files, or any other writable
+`Stream` without needing compatible read or seek capabilities.
+
+```csharp
+using TeeForge.Mirroring;
+
+await using var local = File.Create("local.bin");
+await using var remote = await OpenRemoteUploadAsync();
+await using var replicas = new ReplicaStream(
+    new ReplicaStreamOptions(
+        synchronousMode: TeeStreamSynchronousMode.Concurrent,
+        leaveOpen: true),
+    local,
+    remote);
+
+await source.CopyToAsync(replicas);
+await replicas.FlushAsync();
+```
+
+Async operations begin on every replica before they are awaited. Synchronous
+operations run in replica order by default, or concurrently when selected in
+`ReplicaStreamOptions`. One failure is rethrown directly; multiple failures use
+an index-ordered `AggregateException`. A failed operation is not transactional
+and can leave replicas with different prefixes. See
+[the ReplicaStream guide](docs/replica-stream.md) for the complete contract.
 
 ## Quick start: mirror a stream
 
@@ -197,11 +280,11 @@ can pack live blocks toward the beginning of the backing stream.
 using TeeForge.Sparse;
 
 await using var backing = new FileStream(
-    "disk.tdas",
+    "disk.tfdisk",
     FileMode.CreateNew,
     FileAccess.ReadWrite,
     FileShare.None);
-await using var sparse = DynamicAllocationStream.Create(backing);
+await using var sparse = DynamicAllocationStream.Create(backing, virtualCapacity: 1L << 40);
 
 sparse.Position = 4L * 1024 * 1024 * 1024;
 await sparse.WriteAsync([1, 2, 3, 4]);
@@ -218,13 +301,56 @@ See the
 [version-1 media format](https://github.com/DouglasCleghorn/TeeForge/blob/main/docs/dynamic-allocation-stream-format.md)
 for the exact persistence contract.
 
+`DifferencingStream` stores only changes from an immediate base. Its VHDX-style
+BAT states distinguish inherited, erased, fully present, and partially present
+blocks; 4 KiB presence grains make small writes and partial trim independent of
+the allocation-block size. The child captures the base ID and data-write ID and
+rejects a changed parent on open. Ordinary child I/O never writes upstream.
+
+```csharp
+await using var baseFile = File.Open("base.tfdisk", FileMode.Open, FileAccess.Read);
+await using var baseDisk = DynamicAllocationStream.Open(baseFile,
+    new DynamicAllocationStreamOptions(readOnly: true));
+await using var childFile = File.Open("snapshot.tfdiff", FileMode.CreateNew, FileAccess.ReadWrite);
+await using var child = DifferencingStream.Create(
+    baseDisk,
+    childFile,
+    new DifferencingStreamOptions(leaveBaseOpen: true),
+    parentPathHint: "base.tfdisk");
+
+await child.WriteAtAsync([1, 2, 3], offset: 4094);
+await child.TrimAsync(offset: 4094, length: 2);
+```
+
+Use `.tfdisk` for standalone sparse disks and `.tfdiff` for child images. The
+separate Windows broker under `tools/TeeForge.Mount` can expose either extension
+through an explicitly installed ImDisk driver as a non-shipping prototype; see
+[Windows mounting](docs/windows-mounting.md). The deferred native Windows 11
+direction is recorded in the
+[Storport driver design note](docs/windows-storport-driver.md).
+
 ## Read at offsets and over HTTP ranges
 
 `ITeeRandomAccessStream` adds explicit-offset reads and writes without changing
 a stream's `Position`. `ITeeRangeReadSource` opens an independent, bounded,
 forward-only stream over a larger logical range. `TeeStream`,
-`TeeBufferedStream`, and `DynamicAllocationStream` expose these capabilities
+`TeeBufferedStream`, `DynamicAllocationStream`, and `DifferencingStream` expose these capabilities
 when their destinations or backing stream can support them.
+
+`RandomAccessMemoryStream` is the in-memory implementation. It has the same
+constructor shapes and buffer APIs as `MemoryStream`, serializes positional and
+ordinary stream operations, and supports independent bounded range streams.
+
+```csharp
+using TeeForge.RandomAccess;
+
+await using var memory = new RandomAccessMemoryStream();
+memory.SetLength(1024);
+
+await Task.WhenAll(
+    memory.WriteAtAsync(new byte[] { 1, 2 }, 100).AsTask(),
+    memory.WriteAtAsync(new byte[] { 3, 4 }, 900).AsTask());
+```
 
 `HttpRandomAccessStream` is a read-only leaf for large HTTP resources. It sends
 one range request for each exact positional read or opened range stream, keeps
@@ -372,11 +498,13 @@ Read the
 [ErasureCodeStream design](https://github.com/DouglasCleghorn/TeeForge/blob/main/docs/erasure-code-stream.md)
 and
 [version-1 media format](https://github.com/DouglasCleghorn/TeeForge/blob/main/docs/erasure-code-stream-format.md)
-for the current status.
+for the journaled implementation, or the lighter, journal-free
+[ErasureStream design](https://github.com/DouglasCleghorn/TeeForge/blob/main/docs/erasure-stream.md).
 
 ## Documentation
 
 - [Behavioral specification](https://github.com/DouglasCleghorn/TeeForge/blob/main/docs/specification.md)
+- [Multipath stream design](https://github.com/DouglasCleghorn/TeeForge/blob/main/docs/multipath-stream.md)
 - [Architecture decisions](https://github.com/DouglasCleghorn/TeeForge/tree/main/docs/adr)
 - [Benchmark evidence](https://github.com/DouglasCleghorn/TeeForge/tree/main/docs/benchmarks)
 - [Changelog](https://github.com/DouglasCleghorn/TeeForge/blob/main/CHANGELOG.md)

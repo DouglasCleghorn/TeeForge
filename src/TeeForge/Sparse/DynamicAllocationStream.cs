@@ -7,7 +7,8 @@ using TeeForge.Sparse.Internal;
 namespace TeeForge.Sparse;
 
 /// <summary>Provides a sparse, block-addressed logical stream over a seekable backing stream.</summary>
-public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRangeReadSource
+public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRangeReadSource,
+    IVirtualDiskStream, IDependentStreamRegistry
 {
     private readonly Stream _underlying;
     private readonly ITeeRandomAccessStream? _underlyingRandomAccess;
@@ -15,6 +16,8 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
     private readonly SemaphoreSlim _operationGate = new(1, 1);
     private readonly Dictionary<long, long> _batRegions = [];
     private readonly Dictionary<long, long> _trimRegions = [];
+    private readonly SortedDictionary<long, long> _dependentRegions = [];
+    private readonly HashSet<Guid> _dependentStreamIds = [];
     private readonly Dictionary<long, long> _pendingPatches = [];
     private readonly Dictionary<long, long> _recoveryOverlay = [];
     private readonly Dictionary<long, long> _batCache = [];
@@ -37,6 +40,7 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
     private bool _disposed;
     private bool _readOnly;
     private bool _metadataMayChangeLength;
+    private bool _dataWriteIdAdvanced;
 
     private DynamicAllocationStream(Stream underlying, DynamicAllocationStreamOptions options)
     {
@@ -47,30 +51,33 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
 
     /// <summary>Creates a new dynamic allocation stream over an empty backing stream.</summary>
     /// <param name="underlying">The readable, writable, seekable empty stream that receives the format.</param>
+    /// <param name="virtualCapacity">The positive 4 KiB-aligned immutable logical capacity.</param>
     /// <param name="blockSize">The power-of-two allocation block size.</param>
     /// <param name="options">Creation and lifetime options.</param>
     /// <returns>The initialized stream.</returns>
     public static DynamicAllocationStream Create(
         Stream underlying,
+        long virtualCapacity,
         int blockSize = DynamicAllocationFormat.DefaultBlockSize,
         DynamicAllocationStreamOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(underlying);
         options ??= DynamicAllocationStreamOptions.Default;
         var stream = new DynamicAllocationStream(underlying, options);
-        stream.InitializeCreate(blockSize);
+        stream.InitializeCreate(virtualCapacity, blockSize);
         return stream;
     }
 
     /// <summary>Creates a new dynamic allocation stream over an empty backing stream.</summary>
     public static ValueTask<DynamicAllocationStream> CreateAsync(
         Stream underlying,
+        long virtualCapacity,
         int blockSize = DynamicAllocationFormat.DefaultBlockSize,
         DynamicAllocationStreamOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return ValueTask.FromResult(Create(underlying, blockSize, options));
+        return ValueTask.FromResult(Create(underlying, virtualCapacity, blockSize, options));
     }
 
     /// <summary>Opens an existing dynamic allocation stream.</summary>
@@ -101,8 +108,50 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
     /// <summary>Gets the persistent stream identifier.</summary>
     public Guid Id => _root.Id;
 
+    /// <summary>Gets the current caller-visible data generation.</summary>
+    public Guid DataWriteId => _root.DataWriteId;
+
     /// <summary>Gets the physical allocation block size.</summary>
     public int BlockSize => _root.BlockSize;
+
+    /// <summary>Gets the immutable logical capacity.</summary>
+    public long VirtualCapacity => _root.VirtualCapacity;
+
+    /// <inheritdoc />
+    public bool HasDependentStreams
+    {
+        get
+        {
+            ThrowIfDisposed();
+            _operationGate.Wait();
+            try
+            {
+                return _dependentStreamIds.Count != 0;
+            }
+            finally
+            {
+                _operationGate.Release();
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyCollection<Guid> DependentStreamIds
+    {
+        get
+        {
+            ThrowIfDisposed();
+            _operationGate.Wait();
+            try
+            {
+                return _dependentStreamIds.Order().ToArray();
+            }
+            finally
+            {
+                _operationGate.Release();
+            }
+        }
+    }
 
     /// <summary>Gets whether the wrapper is read-only.</summary>
     public bool IsReadOnly => _readOnly;
@@ -495,6 +544,74 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
         }
     }
 
+    /// <inheritdoc />
+    public void RegisterDependentStream(Guid id)
+    {
+        ThrowIfDisposed();
+        ThrowIfReadOnly();
+        if (id == Guid.Empty)
+        {
+            throw new ArgumentException("A dependent stream identifier cannot be empty.", nameof(id));
+        }
+
+        _operationGate.Wait();
+        try
+        {
+            ThrowBackgroundFault();
+            if (_dependentStreamIds.Add(id))
+            {
+                RewriteDependentRegistry();
+                CommitPendingMetadata();
+            }
+        }
+        finally
+        {
+            _operationGate.Release();
+        }
+    }
+
+    /// <inheritdoc />
+    public ValueTask RegisterDependentStreamAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        RegisterDependentStream(id);
+        return ValueTask.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public void UnregisterDependentStream(Guid id)
+    {
+        ThrowIfDisposed();
+        ThrowIfReadOnly();
+        if (id == Guid.Empty)
+        {
+            throw new ArgumentException("A dependent stream identifier cannot be empty.", nameof(id));
+        }
+
+        _operationGate.Wait();
+        try
+        {
+            ThrowBackgroundFault();
+            if (_dependentStreamIds.Remove(id))
+            {
+                RewriteDependentRegistry();
+                CommitPendingMetadata();
+            }
+        }
+        finally
+        {
+            _operationGate.Release();
+        }
+    }
+
+    /// <inheritdoc />
+    public ValueTask UnregisterDependentStreamAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        UnregisterDependentStream(id);
+        return ValueTask.CompletedTask;
+    }
+
     /// <summary>Estimates bytes removable by metadata-only packing and trim reclamation.</summary>
     public long EstimateCompactionSavings()
     {
@@ -631,11 +748,18 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
         GC.SuppressFinalize(this);
     }
 
-    private void InitializeCreate(int blockSize)
+    private void InitializeCreate(long virtualCapacity, int blockSize)
     {
         if (!DynamicAllocationFormat.IsValidBlockSize(blockSize))
         {
             throw new ArgumentOutOfRangeException(nameof(blockSize), "Block size must be a power of two from 64 KiB through 256 MiB.");
+        }
+
+        if (!DynamicAllocationFormat.IsValidVirtualCapacity(virtualCapacity))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(virtualCapacity),
+                "Virtual capacity must be positive and aligned to 4 KiB.");
         }
 
         if (!_underlying.CanRead || !_underlying.CanWrite || !_underlying.CanSeek)
@@ -654,6 +778,7 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
         }
 
         Guid id = Guid.NewGuid();
+        Guid dataWriteId = Guid.NewGuid();
         int journalOffset = DynamicAllocationFormat.GetJournalOffset(blockSize);
         int journalLength = DynamicAllocationFormat.GetJournalLength(blockSize);
         _root = new RootState(
@@ -670,10 +795,12 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
             0,
             0,
             0,
-            0);
+            0,
+            dataWriteId,
+            virtualCapacity);
 
         byte[] sector = GC.AllocateUninitializedArray<byte>(DynamicAllocationFormat.SectorSize);
-        DynamicAllocationFormat.WriteIdentifier(sector, id, blockSize);
+        DynamicAllocationFormat.WriteIdentifier(sector, id, dataWriteId, blockSize, virtualCapacity);
         WriteAt(DynamicAllocationFormat.IdentifierOffset, sector);
 
         RootState rootA = _root with { Generation = 1 };
@@ -694,6 +821,7 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
         _logicalLength = 0;
         _nextAppendOffset = blockSize;
         _readOnly = false;
+        _dataWriteIdAdvanced = false;
     }
 
     private void InitializeOpen()
@@ -730,7 +858,9 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
 
         _root = !hasB || (hasA && rootA!.Generation > rootB!.Generation) ? rootA! : rootB!;
         if (hasIdentifier &&
-            (identity.Id != _root.Id || identity.BlockSize != _root.BlockSize || identity.MajorVersion != _root.MajorVersion))
+            (identity.Id != _root.Id || identity.BlockSize != _root.BlockSize ||
+            identity.VirtualCapacity != _root.VirtualCapacity ||
+            identity.MajorVersion != _root.MajorVersion))
         {
             throw Corruption("The file identifier and current root disagree.", 0);
         }
@@ -765,6 +895,8 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
         {
             _logicalLength = _root.LogicalLength;
         }
+
+        _dataWriteIdAdvanced = false;
 
         _nextAppendOffset = DynamicAllocationFormat.AlignUp(_underlying.Length, _root.BlockSize);
         if (!_readOnly && _options.FreeBlockQueueCapacity > 0)
@@ -829,6 +961,8 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
         _regionPages.Clear();
         _batRegions.Clear();
         _trimRegions.Clear();
+        _dependentRegions.Clear();
+        _dependentStreamIds.Clear();
         var physicalOwners = new HashSet<long> { 0 };
         long offset = DynamicAllocationFormat.PrimaryRegionOffset;
         long tableIndex = 0;
@@ -866,9 +1000,13 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
                     throw Corruption("Two metadata regions own the same physical block.", entry.PhysicalOffset);
                 }
 
-                Dictionary<long, long> target = entry.Kind == DynamicAllocationFormat.BatRegionKind
-                    ? _batRegions
-                    : _trimRegions;
+                IDictionary<long, long> target = entry.Kind switch
+                {
+                    DynamicAllocationFormat.BatRegionKind => _batRegions,
+                    DynamicAllocationFormat.TrimRegionKind => _trimRegions,
+                    DynamicAllocationFormat.DependentRegionKind => _dependentRegions,
+                    _ => throw Corruption("The region table contains an unsupported kind.", entry.PhysicalOffset),
+                };
                 if (!target.TryAdd(entry.LogicalIndex, entry.PhysicalOffset))
                 {
                     throw Corruption("A logical metadata region is duplicated.", entry.PhysicalOffset);
@@ -888,6 +1026,44 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
 
             offset = page.NextOffset;
             tableIndex++;
+        }
+
+        LoadDependentRegistry();
+    }
+
+    private void LoadDependentRegistry()
+    {
+        long expectedPageIndex = 0;
+        long expectedOffset = _dependentRegions.Count == 0 ? 0 : _dependentRegions[0];
+        foreach ((long pageIndex, long pageOffset) in _dependentRegions)
+        {
+            if (pageIndex != expectedPageIndex || pageOffset != expectedOffset)
+            {
+                throw Corruption("The dependent registry page chain is not consecutive.", pageOffset);
+            }
+
+            byte[] page = new byte[_root.BlockSize];
+            ReadMetadataExactly(pageOffset, page);
+            if (!DynamicAllocationFormat.TryReadDependentPage(page, pageIndex, out long nextOffset, out List<Guid> ids))
+            {
+                throw Corruption("A dependent registry page is invalid.", pageOffset);
+            }
+
+            foreach (Guid id in ids)
+            {
+                if (!_dependentStreamIds.Add(id))
+                {
+                    throw Corruption("A dependent stream identifier is duplicated.", pageOffset);
+                }
+            }
+
+            expectedPageIndex++;
+            expectedOffset = nextOffset;
+        }
+
+        if (expectedOffset != 0)
+        {
+            throw Corruption("The dependent registry chain references a missing page.", expectedOffset);
         }
     }
 
@@ -1002,6 +1178,7 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
         }
 
         ValidateWriteEnd(offset, source.Length);
+        EnsureDataWriteId();
         int completed = 0;
         while (completed < source.Length)
         {
@@ -1045,7 +1222,7 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
                 WriteAt(physicalOffset + blockOffset, source.Slice(completed, count));
             }
 
-            long newLength = DynamicAllocationFormat.LogicalBlockEnd(logicalBlock, _root.BlockSize);
+            long newLength = GetLogicalBlockEnd(logicalBlock);
             if (newLength > _logicalLength)
             {
                 _logicalLength = newLength;
@@ -1068,6 +1245,7 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
         }
 
         ValidateWriteEnd(offset, source.Length);
+        await EnsureDataWriteIdAsync(cancellationToken).ConfigureAwait(false);
         int completed = 0;
         while (completed < source.Length)
         {
@@ -1112,7 +1290,7 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
                 await WriteAtAsync(physicalOffset + blockOffset, source.Slice(completed, count), cancellationToken).ConfigureAwait(false);
             }
 
-            long newLength = DynamicAllocationFormat.LogicalBlockEnd(logicalBlock, _root.BlockSize);
+            long newLength = GetLogicalBlockEnd(logicalBlock);
             if (newLength > _logicalLength)
             {
                 _logicalLength = newLength;
@@ -1129,6 +1307,11 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
 
     private void TrimCore(long offset, long length)
     {
+        if (length != 0)
+        {
+            EnsureDataWriteId();
+        }
+
         long end = offset + length;
         long cursor = offset;
         while (cursor < end)
@@ -1143,7 +1326,7 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
                 if (blockOffset == 0 && count == blockLength)
                 {
                     SetTrimmed(logicalBlock, true);
-                    if (DynamicAllocationFormat.LogicalBlockEnd(logicalBlock, _root.BlockSize) == _logicalLength)
+                    if (GetLogicalBlockEnd(logicalBlock) == _logicalLength)
                     {
                         _metadataMayChangeLength = true;
                     }
@@ -1167,6 +1350,11 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
 
     private async ValueTask TrimCoreAsync(long offset, long length, CancellationToken cancellationToken)
     {
+        if (length != 0)
+        {
+            await EnsureDataWriteIdAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         long end = offset + length;
         long cursor = offset;
         while (cursor < end)
@@ -1182,7 +1370,7 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
                 if (blockOffset == 0 && count == blockLength)
                 {
                     SetTrimmed(logicalBlock, true);
-                    if (DynamicAllocationFormat.LogicalBlockEnd(logicalBlock, _root.BlockSize) == _logicalLength)
+                    if (GetLogicalBlockEnd(logicalBlock) == _logicalLength)
                     {
                         _metadataMayChangeLength = true;
                     }
@@ -1352,6 +1540,82 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
         for (int i = 0; i < data.Length; i += 8)
         {
             QueuePatch(offset + i, BinaryPrimitives.ReadInt64LittleEndian(data[i..]));
+        }
+    }
+
+    private void RewriteDependentRegistry()
+    {
+        int pageCapacity = DynamicAllocationFormat.GetDependentPageCapacity(_root.BlockSize);
+        int requiredPages = Math.Max(1, (_dependentStreamIds.Count + pageCapacity - 1) / pageCapacity);
+        while (_dependentRegions.Count < requiredPages)
+        {
+            AddDependentPage(_dependentRegions.Count);
+        }
+
+        Guid[] ordered = _dependentStreamIds.Order().ToArray();
+        for (int pageIndex = 0; pageIndex < _dependentRegions.Count; pageIndex++)
+        {
+            long pageOffset = _dependentRegions[pageIndex];
+            long nextOffset = pageIndex + 1 < _dependentRegions.Count
+                ? _dependentRegions[pageIndex + 1]
+                : 0;
+            Guid[] pageIds = ordered
+                .Skip(pageIndex * pageCapacity)
+                .Take(pageCapacity)
+                .ToArray();
+            byte[] updated = new byte[_root.BlockSize];
+            DynamicAllocationFormat.WriteDependentPage(updated, pageIndex, nextOffset, pageIds);
+            byte[] current = new byte[_root.BlockSize];
+            ReadMetadataExactly(pageOffset, current);
+            for (int cursor = 0; cursor < updated.Length; cursor += 8)
+            {
+                long value = BinaryPrimitives.ReadInt64LittleEndian(updated.AsSpan(cursor, 8));
+                if (value != BinaryPrimitives.ReadInt64LittleEndian(current.AsSpan(cursor, 8)))
+                {
+                    QueuePatch(pageOffset + cursor, value);
+                }
+            }
+        }
+    }
+
+    private void AddDependentPage(long pageIndex)
+    {
+        long physicalOffset = AllocatePhysicalBlock(logicalBlock: null);
+        byte[] pageBuffer = new byte[_root.BlockSize];
+        DynamicAllocationFormat.WriteDependentPage(pageBuffer, pageIndex, 0, []);
+        WriteAt(physicalOffset, pageBuffer);
+        PhysicalBarrier();
+
+        RegionPageLocation tablePage = _regionPages.FirstOrDefault(static page => page.Page.Entries.Count < page.Page.Capacity)
+            ?? AddSubRegionPage();
+        tablePage.Page.Entries.Add(new RegionEntry(
+            DynamicAllocationFormat.DependentRegionKind,
+            DynamicAllocationFormat.RequiredRegionFlag,
+            pageIndex,
+            physicalOffset));
+        QueueRegionPage(tablePage);
+        _dependentRegions.Add(pageIndex, physicalOffset);
+    }
+
+    private void RewriteDependentPageLink(long pageIndex, long nextOffset)
+    {
+        long pageOffset = _dependentRegions[pageIndex];
+        byte[] current = new byte[_root.BlockSize];
+        ReadMetadataExactly(pageOffset, current);
+        if (!DynamicAllocationFormat.TryReadDependentPage(current, pageIndex, out _, out List<Guid> ids))
+        {
+            throw Corruption("A dependent registry page is invalid.", pageOffset);
+        }
+
+        byte[] updated = new byte[_root.BlockSize];
+        DynamicAllocationFormat.WriteDependentPage(updated, pageIndex, nextOffset, ids);
+        for (int cursor = 0; cursor < updated.Length; cursor += 8)
+        {
+            long value = BinaryPrimitives.ReadInt64LittleEndian(updated.AsSpan(cursor, 8));
+            if (value != BinaryPrimitives.ReadInt64LittleEndian(current.AsSpan(cursor, 8)))
+            {
+                QueuePatch(pageOffset + cursor, value);
+            }
         }
     }
 
@@ -1663,6 +1927,36 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
         _root = root;
     }
 
+    private void EnsureDataWriteId()
+    {
+        if (_dataWriteIdAdvanced)
+        {
+            return;
+        }
+
+        PublishRoot(_root with
+        {
+            Generation = checked(_root.Generation + 1),
+            DataWriteId = Guid.NewGuid(),
+        });
+        _dataWriteIdAdvanced = true;
+    }
+
+    private async ValueTask EnsureDataWriteIdAsync(CancellationToken cancellationToken)
+    {
+        if (_dataWriteIdAdvanced)
+        {
+            return;
+        }
+
+        await PublishRootAsync(_root with
+        {
+            Generation = checked(_root.Generation + 1),
+            DataWriteId = Guid.NewGuid(),
+        }, cancellationToken).ConfigureAwait(false);
+        _dataWriteIdAdvanced = true;
+    }
+
     private async ValueTask PublishRootAsync(RootState root, CancellationToken cancellationToken)
     {
         byte[] buffer = new byte[DynamicAllocationFormat.SectorSize];
@@ -1741,7 +2035,8 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
     {
         CommitPendingMetadata();
         IReadOnlyList<AllocatedPayload> payload = EnumeratePayloadBlocks(includeTrimmed: false);
-        long metadataCount = _batRegions.Count + _trimRegions.Count + Math.Max(0, _regionPages.Count - 1);
+        long metadataCount = _batRegions.Count + _trimRegions.Count + _dependentRegions.Count +
+            Math.Max(0, _regionPages.Count - 1);
         long idealBlockCount = checked(1 + metadataCount + payload.Count);
         long idealLength = checked(idealBlockCount * _root.BlockSize);
         return Math.Max(0, _underlying.Length - idealLength);
@@ -1889,7 +2184,7 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
             }
         }
 
-        return highest < 0 ? 0 : DynamicAllocationFormat.LogicalBlockEnd(highest, _root.BlockSize);
+        return highest < 0 ? 0 : GetLogicalBlockEnd(highest);
     }
 
     private void PackPhysicalBlocks()
@@ -1916,6 +2211,14 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
             if (!owners.TryAdd(offset, PhysicalOwner.ForRegion(DynamicAllocationFormat.TrimRegionKind, index)))
             {
                 throw Corruption("Payload and metadata overlap.", offset);
+            }
+        }
+
+        foreach ((long index, long offset) in _dependentRegions)
+        {
+            if (!owners.TryAdd(offset, PhysicalOwner.ForRegion(DynamicAllocationFormat.DependentRegionKind, index)))
+            {
+                throw Corruption("Dependent registry metadata overlaps another block.", offset);
             }
         }
 
@@ -1971,17 +2274,32 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
             return;
         }
 
-        uint regionKind = owner.Kind == PhysicalOwnerKind.BatRegion
-            ? DynamicAllocationFormat.BatRegionKind
-            : DynamicAllocationFormat.TrimRegionKind;
+        uint regionKind = owner.Kind switch
+        {
+            PhysicalOwnerKind.BatRegion => DynamicAllocationFormat.BatRegionKind,
+            PhysicalOwnerKind.TrimRegion => DynamicAllocationFormat.TrimRegionKind,
+            PhysicalOwnerKind.DependentRegion => DynamicAllocationFormat.DependentRegionKind,
+            _ => throw new InvalidOperationException("Unsupported physical owner kind."),
+        };
         RegionPageLocation page = _regionPages.Single(item =>
             item.Page.Entries.Any(entry => entry.Kind == regionKind && entry.LogicalIndex == owner.LogicalIndex));
         int entryIndex = page.Page.Entries.FindIndex(entry =>
             entry.Kind == regionKind && entry.LogicalIndex == owner.LogicalIndex);
         page.Page.Entries[entryIndex] = page.Page.Entries[entryIndex] with { PhysicalOffset = newOffset };
         QueueRegionPage(page);
-        Dictionary<long, long> map = regionKind == DynamicAllocationFormat.BatRegionKind ? _batRegions : _trimRegions;
-        map[owner.LogicalIndex] = newOffset;
+        if (regionKind == DynamicAllocationFormat.DependentRegionKind)
+        {
+            _dependentRegions[owner.LogicalIndex] = newOffset;
+            if (owner.LogicalIndex > 0)
+            {
+                RewriteDependentPageLink(owner.LogicalIndex - 1, newOffset);
+            }
+        }
+        else
+        {
+            Dictionary<long, long> map = regionKind == DynamicAllocationFormat.BatRegionKind ? _batRegions : _trimRegions;
+            map[owner.LogicalIndex] = newOffset;
+        }
     }
 
     private long GetPackedPhysicalLength()
@@ -1992,7 +2310,10 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
             maximum = Math.Max(maximum, payload.PhysicalOffset);
         }
 
-        foreach (long offset in _batRegions.Values.Concat(_trimRegions.Values).Concat(_regionPages.Skip(1).Select(static p => p.Offset)))
+        foreach (long offset in _batRegions.Values
+            .Concat(_trimRegions.Values)
+            .Concat(_dependentRegions.Values)
+            .Concat(_regionPages.Skip(1).Select(static p => p.Offset)))
         {
             maximum = Math.Max(maximum, offset);
         }
@@ -2022,6 +2343,7 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
 
                         metadataOffsets = _batRegions.Values
                             .Concat(_trimRegions.Values)
+                            .Concat(_dependentRegions.Values)
                             .Concat(_regionPages.Skip(1).Select(static p => p.Offset))
                             .ToArray();
                         batRegionOffsets = _batRegions.OrderBy(static item => item.Key)
@@ -2382,25 +2704,29 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
     {
         ValidatePhysicalBlock(offset, requireComplete: true);
         if (_batRegions.ContainsValue(offset) || _trimRegions.ContainsValue(offset) ||
+            _dependentRegions.ContainsValue(offset) ||
             _regionPages.Skip(1).Any(page => page.Offset == offset))
         {
             throw Corruption("A BAT entry points to metadata.", offset);
         }
     }
 
-    private static void ValidateWriteEnd(long offset, int count)
+    private void ValidateWriteEnd(long offset, int count)
     {
-        if (offset == long.MaxValue || count > long.MaxValue - offset)
+        if (offset < 0 || offset > _root.VirtualCapacity || count > _root.VirtualCapacity - offset)
         {
-            throw new IOException("The write would exceed the maximum logical address.");
+            throw new IOException("The write would exceed virtual capacity.");
         }
     }
 
     private int GetLogicalBlockLength(long logicalBlock)
     {
         long start = checked(logicalBlock * (long)_root.BlockSize);
-        return (int)Math.Min(_root.BlockSize, long.MaxValue - start);
+        return (int)Math.Min(_root.BlockSize, _root.VirtualCapacity - start);
     }
+
+    private long GetLogicalBlockEnd(long logicalBlock) =>
+        Math.Min(DynamicAllocationFormat.LogicalBlockEnd(logicalBlock, _root.BlockSize), _root.VirtualCapacity);
 
     private void ValidateTrimRange(long offset, long length)
     {
@@ -2475,6 +2801,7 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
         Payload,
         BatRegion,
         TrimRegion,
+        DependentRegion,
         SubRegion,
     }
 
@@ -2482,8 +2809,15 @@ public class DynamicAllocationStream : Stream, ITeeRandomAccessStream, ITeeRange
     {
         internal static PhysicalOwner ForPayload(long logicalBlock) => new(PhysicalOwnerKind.Payload, logicalBlock);
 
-        internal static PhysicalOwner ForRegion(uint kind, long index) =>
-            new(kind == DynamicAllocationFormat.BatRegionKind ? PhysicalOwnerKind.BatRegion : PhysicalOwnerKind.TrimRegion, index);
+        internal static PhysicalOwner ForRegion(uint kind, long index) => new(
+            kind switch
+            {
+                DynamicAllocationFormat.BatRegionKind => PhysicalOwnerKind.BatRegion,
+                DynamicAllocationFormat.TrimRegionKind => PhysicalOwnerKind.TrimRegion,
+                DynamicAllocationFormat.DependentRegionKind => PhysicalOwnerKind.DependentRegion,
+                _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+            },
+            index);
 
         internal static PhysicalOwner ForSubRegion(long index) => new(PhysicalOwnerKind.SubRegion, index);
     }

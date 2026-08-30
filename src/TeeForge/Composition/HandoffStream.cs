@@ -363,6 +363,98 @@ public class HandoffStream : Stream, ITeeRandomAccessStream
         }
     }
 
+    /// <summary>
+    /// Migrates the current stream to <paramref name="destination"/> while this stable endpoint
+    /// remains readable and writable.
+    /// </summary>
+    /// <param name="destination">The readable, writable, seekable replacement backing stream.</param>
+    /// <param name="options">Migration, retired-source, and failure-destination ownership options.</param>
+    /// <param name="cancellationToken">The token that cancels migration.</param>
+    /// <remarks>
+    /// The current stream is flushed and atomically replaced by a <see cref="MigratingStream"/>
+    /// before background copying starts. Successful migration atomically replaces that wrapper
+    /// with <paramref name="destination"/>. Failure or cancellation restores the original source,
+    /// except that a failure limited to optional source cleanup keeps the already-authoritative
+    /// destination. Destination ownership transfers to this HandoffStream after a successful
+    /// switch, so <see cref="LeaveOpen"/> controls its eventual disposal. If another handoff
+    /// replaces the migration wrapper first, this method does not overwrite that replacement.
+    /// </remarks>
+    public async Task MigrateAsync(
+        Stream destination,
+        MigratingStreamOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateReplacement(destination);
+        MigratingStreamOptions resolvedOptions = options ?? new MigratingStreamOptions(
+            leaveSourceOpen: _leaveOpen);
+        Stream? source = null;
+        MigratingStream? migration = null;
+
+        await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            source = CurrentStream;
+            await source.FlushAsync(cancellationToken).ConfigureAwait(false);
+            migration = new MigratingStream(
+                source,
+                destination,
+                resolvedOptions,
+                startMigration: false,
+                cancellationToken: cancellationToken);
+            _stream = migration;
+            try
+            {
+                migration.StartMigration();
+            }
+            catch
+            {
+                migration.ReleaseSourceOwnership();
+                _stream = source;
+                migration.Dispose();
+                throw;
+            }
+        }
+        finally
+        {
+            ExitOperation();
+        }
+
+        try
+        {
+            await migration.MigrationCompletion.ConfigureAwait(false);
+        }
+        catch
+        {
+            bool destinationIsAuthoritative = migration.DestinationIsAuthoritative;
+            Stream replacement = destinationIsAuthoritative ? destination : source;
+            bool switched = await FinishMigrationHandoffAsync(
+                    migration,
+                    replacement,
+                    destinationIsAuthoritative)
+                .ConfigureAwait(false);
+            await migration.DisposeAsync().ConfigureAwait(false);
+            if (!switched)
+            {
+                throw new InvalidOperationException(
+                    "The migration wrapper was replaced before migration finished.");
+            }
+
+            throw;
+        }
+
+        bool completedSwitch = await FinishMigrationHandoffAsync(
+                migration,
+                destination,
+                destinationIsAuthoritative: true)
+            .ConfigureAwait(false);
+        await migration.DisposeAsync().ConfigureAwait(false);
+        if (!completedSwitch)
+        {
+            throw new InvalidOperationException(
+                "The migration wrapper was replaced before migration finished.");
+        }
+    }
+
     /// <inheritdoc/>
     public override void Flush()
     {
@@ -692,6 +784,38 @@ public class HandoffStream : Stream, ITeeRandomAccessStream
     }
 
     private void ExitOperation() => _operationGate.Release();
+
+    private async ValueTask<bool> FinishMigrationHandoffAsync(
+        MigratingStream migration,
+        Stream replacement,
+        bool destinationIsAuthoritative)
+    {
+        await EnterOperationAsync(CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            if (!ReferenceEquals(CurrentStream, migration))
+            {
+                return false;
+            }
+
+            await migration.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+            if (destinationIsAuthoritative)
+            {
+                migration.ReleaseDestinationOwnership();
+            }
+            else
+            {
+                migration.ReleaseSourceOwnership();
+            }
+
+            _stream = replacement;
+            return true;
+        }
+        finally
+        {
+            ExitOperation();
+        }
+    }
 
     private void ValidateReplacement(Stream stream)
     {

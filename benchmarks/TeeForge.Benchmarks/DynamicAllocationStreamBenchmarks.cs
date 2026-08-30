@@ -8,6 +8,7 @@ namespace TeeForge.Benchmarks;
 public class DynamicAllocationStreamBenchmarks : IDisposable
 {
     private const int BlockSize = 64 * 1024;
+    private const long VirtualCapacity = 2048L * BlockSize;
     private readonly DynamicAllocationStreamOptions _options = new(
         leaveOpen: true,
         freeBlockQueueCapacity: 0,
@@ -27,7 +28,7 @@ public class DynamicAllocationStreamBenchmarks : IDisposable
         _payload = GC.AllocateUninitializedArray<byte>(PayloadSize);
         _plain = new MemoryStream(new byte[BlockSize], writable: true);
         _backing = new MemoryStream();
-        _sparse = DynamicAllocationStream.Create(_backing, BlockSize, _options);
+        _sparse = DynamicAllocationStream.Create(_backing, VirtualCapacity, BlockSize, _options);
         _sparse.Write(new byte[BlockSize]);
         _sparse.Flush();
     }
@@ -61,7 +62,7 @@ public class DynamicAllocationStreamBenchmarks : IDisposable
     public void DynamicAllocationStreamSparseFirstWrite()
     {
         using var backing = new MemoryStream();
-        using DynamicAllocationStream sparse = DynamicAllocationStream.Create(backing, BlockSize, _options);
+        using DynamicAllocationStream sparse = DynamicAllocationStream.Create(backing, VirtualCapacity, BlockSize, _options);
         sparse.Position = 1024L * BlockSize;
         sparse.Write(_payload);
     }

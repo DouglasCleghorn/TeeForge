@@ -63,6 +63,105 @@ Synchronous and asynchronous disposal wait for any active operation. Unless
 `leaveOpen` is true the current stream is flushed and remains open. Streams
 retired by earlier handoffs are never disposed by `HandoffStream`.
 
+## MigratingStream
+
+`MigratingStream` is a stable readable, writable, seekable endpoint over a
+logical byte sequence being moved from one backing stream to another. Source
+and destination must be distinct readable, writable, seekable streams. The
+constructor captures the source length and position, resizes the destination,
+and starts migration at logical offset zero without changing either backing
+position.
+
+Migration copies at most `MigratingStreamOptions.BufferSize` bytes in one
+quantum. A quantum holds the shared operation gate across its source read and
+destination write, then releases it. A foreground waiter count prevents the
+worker from starting another quantum while any caller operation is queued. An
+already active quantum is not interrupted.
+
+The copied range is one contiguous migrated prefix. While migration is active,
+reads below its end use the destination and reads at or beyond its end use the
+source. A read crossing the boundary may return at the boundary, as permitted
+by `Stream.Read`. Writes and length changes apply source-first to both streams.
+Once the complete destination is flushed, it becomes the sole backing for all
+operations. The stream has its own logical `Position`; physical I/O uses native
+`ITeeRandomAccessStream` operations or a serialized save/seek/restore fallback.
+
+`MigrationCompletion` represents copy, destination flush, and optional source
+truncation. Copy cancellation or failure stops migration and routes subsequent
+operations to the source. A failed destination read is retried from the source.
+A destination failure after a source-first mutation is reported to that caller
+and faults migration. If optional source cleanup fails after the destination
+has already become authoritative, the completion task faults but operations
+remain routed to the complete destination.
+
+`MigratingStreamOptions` independently controls source and destination
+ownership, positive migration buffer size, and explicit source truncation after
+successful destination flush. Source truncation defaults to false because a
+generic `Stream` cannot delete its underlying resource. Disposal cancels and
+waits for migration before flushing leave-open streams or disposing owned
+streams.
+
+`HandoffStream.MigrateAsync` integrates both transition boundaries. Under the
+handoff operation gate it flushes the current stream, constructs a paused
+MigratingStream over that source, installs it as current, and starts migration.
+Foreground operations through the stable endpoint therefore use the migration
+wrapper. When `MigrationCompletion` succeeds, the method flushes the wrapper,
+transfers destination ownership to HandoffStream, and atomically installs the
+destination. The retired wrapper is then disposed, applying source ownership
+from `MigratingStreamOptions`; `HandoffStream.LeaveOpen` controls the adopted
+destination's eventual disposal.
+
+Copy failure or cancellation atomically restores the original source before
+the migration wrapper is disposed. Source ownership transfers back so wrapper
+disposal cannot close the restored endpoint. A failure confined to optional
+source cleanup occurs after destination activation and therefore keeps the
+destination installed. If an unrelated handoff replaces the migration wrapper
+before either boundary, migration completion does not overwrite that newer
+replacement and reports `InvalidOperationException`.
+
+## ReplicaStream
+
+`ReplicaStream` is a write-only, forward-only `Stream` that sends the same byte
+sequence to one or more replicas. It is intended for destinations that need not
+support reads, seeks, length, position, set-length, or random access.
+
+The public constructors are:
+
+```csharp
+ReplicaStream(params Stream[] replicas)
+ReplicaStream(ReplicaStreamOptions options, params Stream[] replicas)
+ReplicaStream(
+    IEnumerable<Stream> replicas,
+    ReplicaStreamOptions? options = null)
+```
+
+At least one non-null, writable replica is required. Duplicate object
+references are rejected. The input is copied to an internal array and is not
+publicly exposed. All validation completes before the wrapper takes ownership.
+
+`CanRead` and `CanSeek` are always false. `CanWrite` and `CanTimeout` are
+intersections across the replicas while the wrapper remains open. `Length`,
+`Position`, reads, seeks, and set-length throw `NotSupportedException`.
+`WriteTimeout` is exposed only through the ordinary `Stream` timeout contract;
+its getter requires replicas to report the same value and its setter fans out.
+
+Writes and flushes attempt every replica. Async calls are started for every
+replica before the phase is awaited. Sync calls run in replica-index order by
+default; `ReplicaStreamOptions.SynchronousMode` can select concurrent dispatch.
+Separate caller operations are not serialized.
+
+A single underlying failure is rethrown with its original stack. Multiple
+failures are reported in an index-ordered `AggregateException`. If every
+failure is cancellation, the first cancellation is rethrown. Once dispatch has
+started, failures do not prevent attempts against later replicas. Replication
+is consequently best-effort for each operation rather than transactional; an
+unsuccessful write may leave replica lengths or contents different.
+
+`ReplicaStreamOptions.LeaveOpen` defaults to false. Sync disposal attempts all
+owned replicas using the configured synchronous dispatch mode, and async
+disposal starts all owned disposals before awaiting them. The wrapper becomes
+disposed even when disposal fails.
+
 ## TeeStream
 
 ### Construction and ownership
@@ -468,26 +567,57 @@ whose uncompressed length is at least `CompressionThreshold` uses the channel's
 negotiated compression; smaller payloads remain uncompressed. The default
 threshold is 16 KiB and the default maximum operation size is 1 MiB.
 
+## Multipath streams
+
+`MultipathSenderStream` and `MultipathReceiverStream` form one directional
+logical byte stream over dynamically supplied reliable ordered `Stream` paths.
+Each path starts with a versioned session and path hello. Length-delimited data
+frames carry a membership epoch, logical group sequence, distribution mode,
+shard geometry, logical length, and XXH64 payload checksum. Receiver paths are
+pumped independently into one bounded reorder window.
+
+RAID 1 sends a group on every active path and publishes the first valid copy.
+RAID 0 sends successive groups over successive paths and faults rather than
+skip a missing assigned group. Erasure mode sends `k` systematic Reed-Solomon
+shards and `r` parity shards over distinct paths and reconstructs a group from
+any `k` valid shards. Fewer than `k + r` active paths automatically selects
+RAID 1 while leaving erasure as the desired mode; erasure delivery resumes
+automatically when enough paths return.
+
+Adding or removing a path advances the sender's membership epoch, and mode
+changes take effect only after the current partial group is published. With no
+path, operations wait subject to cancellation and the configured path timeout.
+A sender owns the effective mode; a receiver may send advisory health reports,
+mode requests, and transport-neutral endpoint advertisements through a separate
+optional `MultipathControlChannel`. The application authenticates endpoint
+hints and creates each transport. Raw UDP reliability is not part of the
+initial contract.
+
+The protocol rationale, security boundary, and implementation status are
+detailed in [the multipath stream design](multipath-stream.md).
+
 ## Verification
 
 - Unit tests cover API validation, consistency, exception aggregation,
   cancellation, ownership, buffered I/O and seeking, broadcast delivery,
   cursor independence, backpressure, completion, failure modes, reset, QUIC
-  mutual authentication, duplex I/O, same-direction serialization, and
-  multiplexed random access.
+  mutual authentication, duplex I/O, same-direction serialization, multiplexed
+  random access, multipath duplication, RAID-0 ordering, erasure recovery,
+  fallback transitions, path churn, and control messages.
 - Stress tests randomize independent reader progress and cancellation.
 - An AOT smoke application is published in CI.
 - Package contents and runtime dependency metadata are tested.
 - BenchmarkDotNet experiments cover 4 KiB, 64 KiB, and 1 MiB payloads; curated
-  results and conclusions remain in the repository.
+  results and conclusions remain in the repository under the
+  [repository-wide sampling and retention policy](benchmarks/README.md#repository-wide-sampling-and-retention-policy).
 
 ## DynamicAllocationStream
 
 `DynamicAllocationStream` exposes a sparse logical address space over a single
 readable, seekable backing stream. Creation additionally requires an empty,
-writable stream. The logical address range ends at `long.MaxValue - 1`, while
+writable stream and a positive 4 KiB-aligned immutable `VirtualCapacity`.
 `Length` is the block-aligned end of the highest allocated, non-trimmed logical
-block and may decrease after trim or compaction.
+block, is capped by that capacity, and may decrease after trim or compaction.
 
 The creation block size is a power of two from 64 KiB through 256 MiB and
 defaults to 1 MiB. A first write allocates and zero-initializes a physical block
@@ -516,6 +646,44 @@ allocation arithmetic and never scans payload for zeroes.
 The exact byte layout, checksum coverage, commit protocol, recovery validation,
 allocation strategy, and compatibility policy are normative in
 [the DynamicAllocationStream format specification](dynamic-allocation-stream-format.md).
+
+## DifferencingStream
+
+`DifferencingStream` overlays a writable child stream on a readable, seekable
+immediate base. A TeeForge base supplies its stable ID, current data-write ID,
+block size, and virtual capacity directly; the explicit overload accepts the
+same identity and geometry for another base-stream implementation. Create and
+open reject geometry or identity mismatches.
+
+Every member of a chain uses the same immutable 4 KiB-aligned virtual capacity,
+allocation-block size, and 4096-byte logical grain origin. The child BAT uses
+VHDX-numbered inherited (0), erased (2), fully present (6), and partially
+present (7) states. Presence bits select child or parent data independently for
+each 4096-byte grain. A small inherited write materializes only affected grains,
+while the first partial write after erase starts from a fully zeroed child
+block.
+
+Trim never reveals the base. A whole block becomes erased; a partial range uses
+4096-byte read-modify-write grains and selects those grains from the child.
+Ordinary reads, writes, trim, flush, and compaction never write upstream. The
+only optional upstream mutation is `NotifyBaseOnCreate`, which registers the
+durable child's stable ID in a writable immediate-base advisory registry.
+
+Both ordinary and explicit-offset synchronous and asynchronous I/O are
+serialized per stream. `ReadAt`, `WriteAt`, and their asynchronous forms do not
+observe or change `Position`. `DataWriteId` advances durably before the first
+logical mutation of each writable open, while child registration does not
+change logical data identity.
+
+Standalone sparse images use `.tfdisk`; difference images use `.tfdiff`. The
+separate Windows broker and its intentionally explicit driver boundary are
+described in [Windows mounting](windows-mounting.md). The precise media contract
+is normative in [the DifferencingStream format specification](differencing-stream-format.md).
+
+`ReadLocator` and `ReadLocatorAsync` inspect a child identifier before the base
+is resolved. They validate the header checksum, return the recorded parent
+identity and geometry plus its optional path hint, and preserve the supplied
+stream's position.
 
 ## ErasureCodeStream
 

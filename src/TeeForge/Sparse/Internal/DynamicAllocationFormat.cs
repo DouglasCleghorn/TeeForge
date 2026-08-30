@@ -25,11 +25,15 @@ internal static class DynamicAllocationFormat
     internal const uint BatRegionKind = 1;
     internal const uint TrimRegionKind = 2;
     internal const uint SubRegionKind = 3;
+    internal const uint DependentRegionKind = 4;
+    internal const int DependentPageHeaderSize = 64;
+    internal const int DependentSlotSize = 16;
 
     private static ReadOnlySpan<byte> IdentifierSignature => "TeeDAS\r\n"u8;
     private static ReadOnlySpan<byte> RootSignature => "TeeRoot\n"u8;
     private static ReadOnlySpan<byte> RegionSignature => "TeeRegn\n"u8;
     private static ReadOnlySpan<byte> JournalSignature => "TeeLog\r\n"u8;
+    private static ReadOnlySpan<byte> DependentSignature => "TeeDeps\n"u8;
 
     internal static int GetJournalLength(int blockSize) => Math.Clamp(blockSize / 4, 16 * 1024, 64 * 1024);
 
@@ -56,7 +60,12 @@ internal static class DynamicAllocationFormat
         return end >= long.MaxValue ? long.MaxValue : (long)end;
     }
 
-    internal static void WriteIdentifier(Span<byte> destination, Guid id, int blockSize)
+    internal static void WriteIdentifier(
+        Span<byte> destination,
+        Guid id,
+        Guid dataWriteId,
+        int blockSize,
+        long virtualCapacity)
     {
         if (destination.Length != SectorSize)
         {
@@ -69,6 +78,8 @@ internal static class DynamicAllocationFormat
         BinaryPrimitives.WriteUInt16LittleEndian(destination[18..], MinorVersion);
         BinaryPrimitives.WriteUInt32LittleEndian(destination[20..], (uint)blockSize);
         WriteGuid(destination[24..40], id);
+        WriteGuid(destination[40..56], dataWriteId);
+        BinaryPrimitives.WriteInt64LittleEndian(destination[56..], virtualCapacity);
         WriteChecksum(destination);
     }
 
@@ -83,12 +94,16 @@ internal static class DynamicAllocationFormat
         ushort major = BinaryPrimitives.ReadUInt16LittleEndian(source[16..]);
         ushort minor = BinaryPrimitives.ReadUInt16LittleEndian(source[18..]);
         int blockSize = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(source[20..]));
-        if (major == 0 || !IsValidBlockSize(blockSize))
+        Guid id = ReadGuid(source[24..40]);
+        Guid initialDataWriteId = ReadGuid(source[40..56]);
+        long virtualCapacity = BinaryPrimitives.ReadInt64LittleEndian(source[56..]);
+        if (major == 0 || !IsValidBlockSize(blockSize) || id == Guid.Empty ||
+            initialDataWriteId == Guid.Empty || !IsValidVirtualCapacity(virtualCapacity))
         {
             return false;
         }
 
-        identity = new(ReadGuid(source[24..40]), major, minor, blockSize);
+        identity = new(id, initialDataWriteId, major, minor, blockSize, virtualCapacity);
         return true;
     }
 
@@ -116,6 +131,8 @@ internal static class DynamicAllocationFormat
         BinaryPrimitives.WriteUInt64LittleEndian(destination[96..], root.ActiveLogFirstSequence);
         BinaryPrimitives.WriteUInt32LittleEndian(destination[104..], (uint)root.NextJournalSlot);
         BinaryPrimitives.WriteInt64LittleEndian(destination[112..], root.RequiredPhysicalLength);
+        WriteGuid(destination[120..136], root.DataWriteId);
+        BinaryPrimitives.WriteInt64LittleEndian(destination[136..], root.VirtualCapacity);
         WriteChecksum(destination);
     }
 
@@ -143,6 +160,8 @@ internal static class DynamicAllocationFormat
         int nextSlot = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(source[104..]));
         uint flags = BinaryPrimitives.ReadUInt32LittleEndian(source[108..]);
         long requiredLength = BinaryPrimitives.ReadInt64LittleEndian(source[112..]);
+        Guid dataWriteId = ReadGuid(source[120..136]);
+        long virtualCapacity = BinaryPrimitives.ReadInt64LittleEndian(source[136..]);
 
         int expectedJournalLength = IsValidBlockSize(blockSize) ? GetJournalLength(blockSize) : -1;
         int slotCount = journalLength > 0 ? journalLength / SectorSize : 0;
@@ -150,8 +169,12 @@ internal static class DynamicAllocationFormat
         bool valid = generation > 0 &&
             major > 0 &&
             IsValidBlockSize(blockSize) &&
+            id != Guid.Empty &&
+            dataWriteId != Guid.Empty &&
+            IsValidVirtualCapacity(virtualCapacity) &&
             logicalLength >= 0 &&
-            (logicalLength == long.MaxValue || (logicalLength & (blockSize - 1L)) == 0) &&
+            logicalLength <= virtualCapacity &&
+            (logicalLength == virtualCapacity || (logicalLength & (blockSize - 1L)) == 0) &&
             journalOffset == GetJournalOffset(blockSize) &&
             journalLength == expectedJournalLength &&
             entrySize == SectorSize &&
@@ -183,9 +206,14 @@ internal static class DynamicAllocationFormat
             activeCount,
             activeFirstSequence,
             nextSlot,
-            requiredLength);
+            requiredLength,
+            dataWriteId,
+            virtualCapacity);
         return true;
     }
+
+    internal static bool IsValidVirtualCapacity(long virtualCapacity) =>
+        virtualCapacity > 0 && (virtualCapacity & (SectorSize - 1L)) == 0;
 
     internal static int WriteJournalEntry(
         Span<byte> destination,
@@ -376,7 +404,7 @@ internal static class DynamicAllocationFormat
         for (int i = 0; i < entryCount; i++)
         {
             RegionEntry item = ReadRegionEntry(prefix[cursor..(cursor + RegionEntrySize)]);
-            if (item.Kind is not (BatRegionKind or TrimRegionKind) ||
+            if (item.Kind is not (BatRegionKind or TrimRegionKind or DependentRegionKind) ||
                 item.Flags != RequiredRegionFlag || item.LogicalIndex < 0 || item.PhysicalOffset <= 0)
             {
                 return false;
@@ -436,6 +464,89 @@ internal static class DynamicAllocationFormat
         BinaryPrimitives.ReadInt64LittleEndian(source[16..]),
         BinaryPrimitives.ReadInt64LittleEndian(source[24..]));
 
+    internal static int GetDependentPageCapacity(int blockSize) =>
+        (blockSize - DependentPageHeaderSize) / DependentSlotSize;
+
+    internal static void WriteDependentPage(
+        Span<byte> destination,
+        long pageIndex,
+        long nextOffset,
+        IReadOnlyCollection<Guid> ids)
+    {
+        int capacity = GetDependentPageCapacity(destination.Length);
+        if (ids.Count > capacity || pageIndex < 0 || nextOffset < 0)
+        {
+            throw new ArgumentException("Invalid dependent registry page.", nameof(ids));
+        }
+
+        destination.Clear();
+        DependentSignature.CopyTo(destination);
+        BinaryPrimitives.WriteInt64LittleEndian(destination[16..], pageIndex);
+        BinaryPrimitives.WriteUInt32LittleEndian(destination[24..], (uint)ids.Count);
+        BinaryPrimitives.WriteUInt32LittleEndian(destination[28..], (uint)capacity);
+        BinaryPrimitives.WriteInt64LittleEndian(destination[32..], nextOffset);
+        int cursor = DependentPageHeaderSize;
+        foreach (Guid id in ids)
+        {
+            if (id == Guid.Empty)
+            {
+                throw new ArgumentException("Dependent stream identifiers cannot be empty.", nameof(ids));
+            }
+
+            WriteGuid(destination[cursor..(cursor + DependentSlotSize)], id);
+            cursor += DependentSlotSize;
+        }
+
+        WriteChecksum(destination);
+    }
+
+    internal static bool TryReadDependentPage(
+        ReadOnlySpan<byte> source,
+        long expectedPageIndex,
+        out long nextOffset,
+        out List<Guid> ids)
+    {
+        nextOffset = 0;
+        ids = [];
+        int capacity = GetDependentPageCapacity(source.Length);
+        if (source.Length < MinimumBlockSize ||
+            !source[..8].SequenceEqual(DependentSignature) ||
+            !ValidateChecksum(source) ||
+            BinaryPrimitives.ReadInt64LittleEndian(source[16..]) != expectedPageIndex ||
+            BinaryPrimitives.ReadUInt32LittleEndian(source[28..]) != (uint)capacity ||
+            source[40..DependentPageHeaderSize].IndexOfAnyExcept((byte)0) >= 0)
+        {
+            return false;
+        }
+
+        uint liveCount = BinaryPrimitives.ReadUInt32LittleEndian(source[24..]);
+        nextOffset = BinaryPrimitives.ReadInt64LittleEndian(source[32..]);
+        if (liveCount > (uint)capacity || nextOffset < 0)
+        {
+            return false;
+        }
+
+        var unique = new HashSet<Guid>();
+        int cursor = DependentPageHeaderSize;
+        for (int index = 0; index < capacity; index++)
+        {
+            Guid id = ReadGuid(source[cursor..(cursor + DependentSlotSize)]);
+            cursor += DependentSlotSize;
+            if (id != Guid.Empty && !unique.Add(id))
+            {
+                return false;
+            }
+        }
+
+        if (unique.Count != liveCount || source[cursor..].IndexOfAnyExcept((byte)0) >= 0)
+        {
+            return false;
+        }
+
+        ids.AddRange(unique);
+        return true;
+    }
+
     private static void WriteChecksum(Span<byte> structure)
     {
         structure.Slice(8, 8).Clear();
@@ -469,7 +580,13 @@ internal static class DynamicAllocationFormat
     private static Guid ReadGuid(ReadOnlySpan<byte> source) => new(source, bigEndian: true);
 }
 
-internal readonly record struct FormatIdentity(Guid Id, ushort MajorVersion, ushort MinorVersion, int BlockSize);
+internal readonly record struct FormatIdentity(
+    Guid Id,
+    Guid InitialDataWriteId,
+    ushort MajorVersion,
+    ushort MinorVersion,
+    int BlockSize,
+    long VirtualCapacity);
 
 internal sealed record RootState(
     ulong Generation,
@@ -485,7 +602,9 @@ internal sealed record RootState(
     int ActiveLogEntryCount,
     ulong ActiveLogFirstSequence,
     int NextJournalSlot,
-    long RequiredPhysicalLength)
+    long RequiredPhysicalLength,
+    Guid DataWriteId,
+    long VirtualCapacity)
 {
     internal bool IsClean => ActiveLogId == Guid.Empty;
 }

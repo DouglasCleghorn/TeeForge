@@ -4,6 +4,32 @@ All notable changes to TeeForge are documented here.
 
 ## [Unreleased]
 
+- Add `ReplicaStream`, a write-only, forward-only stream that replicates writes
+  and flushes across unique writable destinations with concurrent async fan-out,
+  configurable synchronous dispatch, deterministic aggregate failures, and
+  explicit ownership options.
+- Add immutable 4 KiB-aligned virtual capacity, stable/data-write identity, and
+  an advisory dependent-child registry to `DynamicAllocationStream`.
+- Add `DifferencingStream` and the `.tfdiff` format with VHDX-numbered inherited,
+  erased, fully present, and partially present BAT states, 4 KiB presence-grain
+  writes and trim, immutable checksummed state records, parent identity and
+  locator validation, nested chains, crash-safe compaction, optional durable
+  child registration, and position-independent synchronous and asynchronous I/O.
+- Add the separate Windows `TeeForge.Mount` tool for `.tfdisk` and `.tfdiff`
+  images as a non-shipping prototype, using an explicitly installed ImDisk
+  shared-memory proxy with 4 KiB sectors and READ, WRITE, UNMAP, ZERO, and
+  read-only support. Record the deferred signed Storport architecture for a
+  future native Windows 11 integration.
+- Add `RandomAccessMemoryStream`, a `MemoryStream`-compatible in-memory source
+  with thread-safe explicit-offset reads and writes, position preservation, and
+  independent bounded range streams.
+- Add `MigratingStream`, a foreground-prioritized live storage migration
+  wrapper with prefix-aware reads, source-first mirrored writes,
+  `ITeeRandomAccessStream` support, cancellation and failure fallback, and
+  explicit destination handoff and optional source truncation. Add
+  `HandoffStream.MigrateAsync` to atomically install the live migration wrapper
+  at start and the destination at successful finish, restoring the source on
+  failure or cancellation.
 - Add `HandoffStream`, a stable serialized endpoint that hands operations off
   to a caller-supplied stream with the same final destination, including
   `ITeeRandomAccessStream` support through native or serialized seek fallback.
@@ -12,6 +38,9 @@ All notable changes to TeeForge are documented here.
   pairs, opener-selected transparent Brotli compression, and named
   `QuicRandomAccessChannel` services using threshold-compressed independent
   request streams.
+- Add directional `MultipathSenderStream` and `MultipathReceiverStream` data
+  paths with dynamic membership, RAID 1, RAID 0, Reed-Solomon erasure coding,
+  automatic mirrored fallback, and an optional reliable control channel.
 - Add the public fixed-capacity `ErasureCodeStream` with self-describing member
   headers, SIMD systematic Reed-Solomon coding, degraded reads and writes,
   bounded journaled stripe updates, committed-write replay, per-member sampled

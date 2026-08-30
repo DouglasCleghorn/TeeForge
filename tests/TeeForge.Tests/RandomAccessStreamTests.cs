@@ -103,6 +103,7 @@ public class RandomAccessStreamTests
         await using var backing = new TestRandomAccessStream([]);
         await using DynamicAllocationStream sparse = DynamicAllocationStream.Create(
             backing,
+            virtualCapacity: 16L * 64 * 1024,
             blockSize: 64 * 1024,
             new DynamicAllocationStreamOptions(
                 leaveOpen: true,

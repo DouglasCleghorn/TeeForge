@@ -3,6 +3,7 @@ namespace TeeForge.Tests;
 public class DynamicAllocationStreamTests
 {
     private const int BlockSize = 64 * 1024;
+    private const long VirtualCapacity = 16L * BlockSize;
     private static readonly DynamicAllocationStreamOptions TestOptions = new(
         leaveOpen: true,
         freeBlockQueueCapacity: 0,
@@ -12,7 +13,7 @@ public class DynamicAllocationStreamTests
     public void Partial_first_write_extends_to_block_end_and_zero_initializes_remainder()
     {
         using var backing = new MemoryStream();
-        using DynamicAllocationStream stream = DynamicAllocationStream.Create(backing, BlockSize, TestOptions);
+        using DynamicAllocationStream stream = DynamicAllocationStream.Create(backing, VirtualCapacity, BlockSize, TestOptions);
 
         stream.Position = 123;
         stream.Write([1, 2, 3]);
@@ -29,7 +30,7 @@ public class DynamicAllocationStreamTests
     {
         using var backing = new MemoryStream();
         Guid id;
-        using (DynamicAllocationStream created = DynamicAllocationStream.Create(backing, BlockSize, TestOptions))
+        using (DynamicAllocationStream created = DynamicAllocationStream.Create(backing, VirtualCapacity, BlockSize, TestOptions))
         {
             id = created.Id;
             created.Position = (2L * BlockSize) + 17;
@@ -52,7 +53,7 @@ public class DynamicAllocationStreamTests
     public void Full_block_trim_discards_data_and_lowers_tail_length()
     {
         using var backing = new MemoryStream();
-        using DynamicAllocationStream stream = DynamicAllocationStream.Create(backing, BlockSize, TestOptions);
+        using DynamicAllocationStream stream = DynamicAllocationStream.Create(backing, VirtualCapacity, BlockSize, TestOptions);
         stream.Write(new byte[BlockSize]);
         stream.Write(Enumerable.Repeat((byte)42, BlockSize).ToArray());
 
@@ -66,7 +67,7 @@ public class DynamicAllocationStreamTests
     public void Partial_trim_zeroes_only_requested_bytes()
     {
         using var backing = new MemoryStream();
-        using DynamicAllocationStream stream = DynamicAllocationStream.Create(backing, BlockSize, TestOptions);
+        using DynamicAllocationStream stream = DynamicAllocationStream.Create(backing, VirtualCapacity, BlockSize, TestOptions);
         stream.Write(Enumerable.Repeat((byte)9, BlockSize).ToArray());
 
         stream.Trim(100, 200);
@@ -83,7 +84,7 @@ public class DynamicAllocationStreamTests
     public void Partial_write_to_trimmed_block_does_not_restore_discarded_bytes()
     {
         using var backing = new MemoryStream();
-        using DynamicAllocationStream stream = DynamicAllocationStream.Create(backing, BlockSize, TestOptions);
+        using DynamicAllocationStream stream = DynamicAllocationStream.Create(backing, VirtualCapacity, BlockSize, TestOptions);
         stream.Write(Enumerable.Repeat((byte)31, BlockSize).ToArray());
         stream.Trim(0, BlockSize);
 
@@ -102,7 +103,7 @@ public class DynamicAllocationStreamTests
     public void Forced_read_only_mode_allows_reads_and_rejects_mutation()
     {
         using var backing = new MemoryStream();
-        using (DynamicAllocationStream created = DynamicAllocationStream.Create(backing, BlockSize, TestOptions))
+        using (DynamicAllocationStream created = DynamicAllocationStream.Create(backing, VirtualCapacity, BlockSize, TestOptions))
         {
             created.Write([1, 2, 3]);
             created.Flush();
@@ -128,7 +129,7 @@ public class DynamicAllocationStreamTests
     {
         using var storage = new MemoryStream();
         using var faulting = new FaultingWriteStream(storage);
-        DynamicAllocationStream stream = DynamicAllocationStream.Create(faulting, BlockSize, TestOptions);
+        DynamicAllocationStream stream = DynamicAllocationStream.Create(faulting, VirtualCapacity, BlockSize, TestOptions);
         stream.Position = BlockSize;
         stream.Write([4, 5, 6]);
         faulting.ThrowOnWriteNumber = 3;
@@ -148,7 +149,7 @@ public class DynamicAllocationStreamTests
     {
         using var storage = new MemoryStream();
         using var faulting = new FaultingWriteStream(storage);
-        DynamicAllocationStream stream = DynamicAllocationStream.Create(faulting, BlockSize, TestOptions);
+        DynamicAllocationStream stream = DynamicAllocationStream.Create(faulting, VirtualCapacity, BlockSize, TestOptions);
         stream.Position = BlockSize;
         stream.Write([11, 12, 13]);
         faulting.ThrowOnWriteNumber = 3;
@@ -169,6 +170,7 @@ public class DynamicAllocationStreamTests
         using var backing = new MemoryStream();
         await using (DynamicAllocationStream created = await DynamicAllocationStream.CreateAsync(
             backing,
+            VirtualCapacity,
             BlockSize,
             TestOptions,
             TestContext.Current.CancellationToken))
@@ -192,7 +194,7 @@ public class DynamicAllocationStreamTests
     public void Fast_compaction_reclaims_trimmed_tail_and_truncates_backing_stream()
     {
         using var backing = new MemoryStream();
-        using DynamicAllocationStream stream = DynamicAllocationStream.Create(backing, BlockSize, TestOptions);
+        using DynamicAllocationStream stream = DynamicAllocationStream.Create(backing, VirtualCapacity, BlockSize, TestOptions);
         stream.Write(Enumerable.Repeat((byte)1, BlockSize).ToArray());
         stream.Write(Enumerable.Repeat((byte)2, BlockSize).ToArray());
         stream.Flush();
@@ -211,7 +213,7 @@ public class DynamicAllocationStreamTests
     public void Slow_compaction_reclaims_zero_tail_blocks_without_zero_scan_in_estimate()
     {
         using var backing = new MemoryStream();
-        using DynamicAllocationStream stream = DynamicAllocationStream.Create(backing, BlockSize, TestOptions);
+        using DynamicAllocationStream stream = DynamicAllocationStream.Create(backing, VirtualCapacity, BlockSize, TestOptions);
         stream.Write(Enumerable.Repeat((byte)1, BlockSize).ToArray());
         stream.Write(new byte[BlockSize]);
         stream.Flush();
@@ -229,7 +231,7 @@ public class DynamicAllocationStreamTests
     public void Compaction_moves_live_payload_into_earlier_hole_without_changing_logical_data()
     {
         using var backing = new MemoryStream();
-        using DynamicAllocationStream stream = DynamicAllocationStream.Create(backing, BlockSize, TestOptions);
+        using DynamicAllocationStream stream = DynamicAllocationStream.Create(backing, VirtualCapacity, BlockSize, TestOptions);
         stream.Write(Enumerable.Repeat((byte)1, BlockSize).ToArray());
         stream.Write(Enumerable.Repeat((byte)2, BlockSize).ToArray());
         stream.Write(Enumerable.Repeat((byte)3, BlockSize).ToArray());
@@ -253,7 +255,7 @@ public class DynamicAllocationStreamTests
     public void Sequential_copy_requires_no_logical_seek()
     {
         using var backing = new MemoryStream();
-        using DynamicAllocationStream stream = DynamicAllocationStream.Create(backing, BlockSize, TestOptions);
+        using DynamicAllocationStream stream = DynamicAllocationStream.Create(backing, VirtualCapacity, BlockSize, TestOptions);
         byte[] expected = Enumerable.Range(0, BlockSize + 17).Select(index => (byte)index).ToArray();
         stream.Write(expected);
         stream.Position = 0;
@@ -276,7 +278,7 @@ public class DynamicAllocationStreamTests
     public void One_corrupt_root_falls_back_to_other_valid_copy()
     {
         using var backing = new MemoryStream();
-        using (DynamicAllocationStream stream = DynamicAllocationStream.Create(backing, BlockSize, TestOptions))
+        using (DynamicAllocationStream stream = DynamicAllocationStream.Create(backing, VirtualCapacity, BlockSize, TestOptions))
         {
             Assert.Equal(0, stream.Length);
         }

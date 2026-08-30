@@ -2,6 +2,11 @@
 
 Status: accepted for implementation on 2026-08-23.
 
+Version-1.0 revision note: TeeForge has not released this format. The 1.0
+layout is therefore revised in place to add `VirtualCapacity`, `DataWriteId`,
+and the advisory dependent-child registry. Pre-release prototype images have no
+compatibility guarantee.
+
 ## Conventions
 
 All offsets and lengths are bytes. All integers are unsigned little-endian
@@ -18,10 +23,12 @@ inclusive, and defaults to 1 MiB. Physical block zero is reserved. Every other
 payload or metadata block begins at a positive block-size-aligned absolute
 offset. A BAT value of zero is therefore an unambiguous unallocated marker.
 
-The maximum logical address is `long.MaxValue - 1`. Logical length is zero for a
-new stream and otherwise the end of the highest live logical block, rounded to
-block size and capped at `long.MaxValue`. Sparse gaps below logical length read
-as zero. SetLength is unsupported.
+Every image stores a positive immutable `VirtualCapacity` that is a multiple of
+4096 bytes. Logical length is zero for a new stream and otherwise the end of the
+highest live logical block, rounded to block size and capped at
+`VirtualCapacity`. Sparse gaps below logical length read as zero. Reads are
+bounded by capacity, and writes or trims crossing capacity fail before physical
+I/O. SetLength is unsupported.
 
 ## Physical layout
 
@@ -38,9 +45,10 @@ Block zero contains all bootstrap and recovery structures:
 `journalLength` is `clamp(blockSize / 4, 16 KiB, 64 KiB)` and is always a
 multiple of 4 KiB. The primary region table ends where the journal begins.
 
-Blocks after block zero may contain payload, BAT, trim bitmap, or sub-region
-table data in any order. Allocation normally prefers physical adjacency, then
-known early holes, then aligned end-of-file. Physical objects never overlap.
+Blocks after block zero may contain payload, BAT, trim bitmap, dependent-child
+registry, or sub-region table data in any order. Allocation normally prefers
+physical adjacency, then known early holes, then aligned end-of-file. Physical
+objects never overlap.
 
 ## File identifier
 
@@ -54,11 +62,15 @@ The 4 KiB file identifier is immutable after creation.
 | 18 | 2 | Minor version: 0 |
 | 20 | 4 | Block size |
 | 24 | 16 | Stream ID |
-| 40 | 4056 | Reserved |
+| 40 | 16 | Initial data-write ID |
+| 56 | 8 | Virtual capacity |
+| 64 | 4032 | Reserved |
 
-The roots duplicate every field needed to recover when the identifier sector is
-damaged. An implementation may open a file with an invalid identifier only when
-a valid root supplies matching format identity.
+The stream ID and virtual capacity are immutable. The initial data-write ID is
+the value at creation; current data identity is stored in the roots. The roots
+duplicate every field needed to recover when the identifier sector is damaged.
+An implementation may open a file with an invalid identifier only when a valid
+root supplies matching format identity.
 
 ## Redundant roots
 
@@ -84,7 +96,9 @@ Each root occupies 4 KiB and has this layout:
 | 104 | 4 | Next journal slot |
 | 108 | 4 | Flags; zero in version 1 |
 | 112 | 8 | Required physical length for active replay |
-| 120 | 3976 | Reserved |
+| 120 | 16 | Current data-write ID |
+| 136 | 8 | Virtual capacity |
+| 144 | 3952 | Reserved |
 
 A root is valid when its signature, checksum, version fields, geometry, and
 reserved constraints validate. The valid root with the greatest generation is
@@ -96,9 +110,14 @@ required length. An active root has a nonzero log ID and identifies one complete
 journal transaction. Generations advance for activation and again for cleaning.
 The inactive root is always overwritten when publishing a newer root.
 
-Cached logical length must be block-aligned unless it is `long.MaxValue`. A
-clean open trusts it. Recovery from an active log recomputes it from the replayed
-BAT and trim state before publishing a clean root.
+Cached logical length must be block-aligned or equal to virtual capacity, and
+must not exceed virtual capacity. A clean open trusts it. Recovery from an
+active log recomputes it from the replayed BAT and trim state before publishing
+a clean root.
+
+Current data-write ID is nonzero. Before the first caller-visible logical write
+or trim in each writable open, a new nonzero value is durably published in a
+root. Registry maintenance and physical-only compaction do not change it.
 
 ## Region tables
 
@@ -132,10 +151,11 @@ slot. Unused ordinary slots are excluded.
 | 16 | 8 | Absolute physical offset |
 | 24 | 8 | Reserved |
 
-Kinds are 1 for BAT, 2 for trim bitmap, and 3 for sub-region table. Flag bit 0
-means required; all other version-1 flag bits are zero. BAT and trim entries are
-required. The final link slot is either all zero or a required kind-3 entry. Its
-logical index is the next table index.
+Kinds are 1 for BAT, 2 for trim bitmap, 3 for sub-region table, and 4 for a
+dependent-child registry page. Flag bit 0 means required; all other version-1
+flag bits are zero. BAT, trim, and dependent-page entries are required. The
+final link slot is either all zero or a required kind-3 entry. Its logical index
+is the next table index.
 
 Duplicate `(kind, logical region index)` pairs, duplicate physical ownership,
 misaligned offsets, offsets inside block zero, truncated regions, loops, and
@@ -144,6 +164,29 @@ nonconsecutive sub-region indexes are corruption.
 A BAT region with index `r` covers logical block indexes beginning at
 `r * (blockSize / 8)`. A trim region with index `r` covers logical block indexes
 beginning at `r * (blockSize * 8)`.
+
+### Dependent-child registry page
+
+A kind-4 region is one block. Its logical region index is its zero-based page
+index. Pages are linked in ascending index and allocated only when needed.
+
+| Offset | Size | Field |
+| ---: | ---: | --- |
+| 0 | 8 | Signature: `TeeDeps\n` |
+| 8 | 8 | XXH64 of the complete page |
+| 16 | 8 | Page index |
+| 24 | 4 | Live GUID count |
+| 28 | 4 | Slot capacity: `(blockSize - 64) / 16` |
+| 32 | 8 | Next-page physical offset, or zero |
+| 40 | 24 | Reserved |
+| 64 | remainder | Fixed 16-byte GUID slots |
+
+GUIDs use network byte order. An all-zero slot is free. Duplicate nonzero GUIDs,
+an incorrect live count, a bad link, or nonzero unused tail bytes are corruption.
+Registration and unregistration are idempotent journal transactions. The list
+contains immediate known children only, is advisory, may be stale, never blocks
+logical writes, and does not affect data-write identity. Compaction packs live
+GUIDs and removes empty trailing pages.
 
 Unknown required kinds prevent opening. A newer minor version containing only
 understood required kinds may open read-only. Writable open requires exact
@@ -248,15 +291,16 @@ not modified.
 
 ## Logical I/O
 
-Position may range from zero through `long.MaxValue`. Reads at or beyond Length
-return zero bytes. Reads below Length return payload for allocated untrimmed
-blocks and synthesize zero for sparse or trimmed blocks.
+Position may range from zero through the immutable `VirtualCapacity`. Reads at
+or beyond Length return zero bytes. Reads below Length return payload for
+allocated untrimmed blocks and synthesize zero for sparse or trimmed blocks.
 
-A nonempty write whose exclusive end would exceed `long.MaxValue` fails before
-performing I/O. Writing any byte makes its logical block live and may extend
-Length to that block's end. A partial first write initializes every other byte
-of the physical block to zero. Ordinary writes to allocated untrimmed blocks are
-in-place and may be partially visible after failure or power loss.
+A nonempty write whose exclusive end would exceed `VirtualCapacity` fails
+before performing I/O. Writing any byte makes its logical block live and may
+extend Length to that block's end, capped by `VirtualCapacity`. A partial first
+write initializes every other byte of the physical block to zero. Ordinary
+writes to allocated untrimmed blocks are in-place and may be partially visible
+after failure or power loss.
 
 Public operations are serialized. The backing stream must be readable and
 seekable; creation additionally requires write capability and an empty physical

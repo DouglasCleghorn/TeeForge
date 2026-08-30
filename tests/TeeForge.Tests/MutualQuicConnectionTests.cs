@@ -206,6 +206,9 @@ public class MutualQuicConnectionTests
         byte[] clientRead = await ReadPipeExactlyAsync(client.Input, response.Length);
         Assert.Equal(request, serverRead);
         Assert.Equal(response, clientRead);
+        client.CompleteWrites();
+        server.CompleteWrites();
+        await Task.WhenAll(client.WritesClosed, server.WritesClosed);
     }
 
     [Fact]
@@ -270,6 +273,13 @@ public class MutualQuicConnectionTests
             clientIdentity.CertificatePath,
             TestProtocol,
             allowedCompressions: serverAllowedCompressions);
+        using (X509Certificate2 clientCertificate = clientOptions.LoadLocalCertificate())
+        using (X509Certificate2 serverCertificate = serverOptions.LoadLocalCertificate())
+        {
+            Assert.True(clientCertificate.HasPrivateKey);
+            Assert.True(serverCertificate.HasPrivateKey);
+        }
+
         var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         MutualQuicConnectionListener? listener = null;
 
@@ -293,21 +303,6 @@ public class MutualQuicConnectionTests
                 clientIdentity,
                 serverIdentity,
                 timeout);
-        }
-        catch (CryptographicException exception)
-            when (OperatingSystem.IsWindows() &&
-                exception.Message.Contains("file specified", StringComparison.OrdinalIgnoreCase))
-        {
-            if (listener is not null)
-            {
-                await listener.DisposeAsync();
-            }
-
-            clientIdentity.Dispose();
-            serverIdentity.Dispose();
-            timeout.Dispose();
-            Assert.Skip("The Windows test sandbox does not permit a temporary persisted TLS key.");
-            throw;
         }
         catch
         {

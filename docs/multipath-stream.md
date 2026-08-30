@@ -1,6 +1,6 @@
 # MultipathStream design
 
-Status: exploratory design; names and public API are not yet committed.
+Status: initial reliable-`Stream` implementation and version-1 protocol draft.
 
 ## Purpose
 
@@ -39,7 +39,7 @@ packet-transport adapter for a datagram protocol such as UDP.
   and an unreliable datagram transport.
 - Recovering RAID-0 data assigned to a path that fails before delivering it.
 
-## Proposed shape
+## Public shape
 
 The data plane should initially be directional rather than pretending every
 transport is full duplex:
@@ -53,13 +53,13 @@ Two sender/receiver pairs can be composed when an application needs a
 full-duplex logical connection. This model also admits QUIC unidirectional
 streams and UDP without reserving an otherwise unused data direction.
 
-The core should operate on message-preserving data links. A reliable `Stream`
-adapter adds a length prefix and exact-read loop. A UDP adapter preserves one
-protocol frame per datagram and must impose a maximum frame size. Keeping the
-message boundary below MultipathStream prevents a stalled byte-stream path
-from blocking parsing on every other path.
+The first implementation accepts reliable ordered `Stream` paths directly and
+adds a length prefix and exact-read loop. Each receiver path has an independent
+frame pump, so a stalled byte-stream path does not block parsing on every other
+path. A future UDP adapter would preserve one protocol frame per datagram and
+impose a maximum frame size.
 
-An early API sketch is:
+The principal API is:
 
 ```csharp
 public enum MultipathStreamMode
@@ -78,21 +78,34 @@ public class MultipathStreamOptions
     public bool LeaveOpen { get; }
 }
 
-public interface IMultipathDataLink : IAsyncDisposable
-{
-    ValueTask SendAsync(
-        ReadOnlyMemory<byte> frame,
-        CancellationToken cancellationToken = default);
+var options = new MultipathStreamOptions(
+    mode: MultipathStreamMode.ErasureCode,
+    erasureDataShardCount: 4,
+    erasureParityShardCount: 2);
 
-    ValueTask<int> ReceiveAsync(
-        Memory<byte> frame,
-        CancellationToken cancellationToken = default);
-}
+await using var sender = new MultipathSenderStream(options);
+await using var receiver = new MultipathReceiverStream(sender.SessionId, options);
+
+Guid senderPathId = await sender.AddPathAsync(outboundStream);
+Guid receiverPathId = await receiver.AddPathAsync(inboundStream);
+
+await sender.WriteAsync(payload);
+await sender.CompleteAsync();
+await receiver.CopyToAsync(destination);
 ```
 
-The exact public split between sender, receiver, session, and link adapter is
-an open decision. The interface above illustrates the required packet
-boundary; it is not yet a committed API.
+`AddPathAsync` also has an initializer overload. The initializer runs before
+the sender writes, or the receiver reads, the multipath hello. `RemovePathAsync`
+changes later groups without changing the interpretation of frames already in
+flight. `ChangeModeAsync` flushes the current partial group before making the
+sender's new desired mode effective. A sender calls `CompleteAsync` to flush its
+last partial group and publish logical EOF; disposing it without completion is
+an abort and may discard buffered bytes.
+
+`MultipathControlChannel` independently frames `MultipathControlMessage`
+instances on an optional reliable control `Stream`. Applications receive a
+mode request or endpoint advertisement, apply their own authorization policy,
+and then call `ChangeModeAsync` or connect and add the suggested path.
 
 ## Data-plane protocol
 
@@ -154,8 +167,14 @@ new set becomes active only for the next complete group; frames from an older
 epoch remain decodable under their original parameters.
 
 A newly added path first exchanges a join record containing the session ID,
-path ID, protocol version, and next usable epoch. This prevents an unrelated
-or delayed transport from being attached to the wrong logical stream.
+path ID, and protocol version. Its first data frame names the membership epoch
+in which it became active. This prevents an unrelated or delayed transport
+from being attached to the wrong logical stream.
+
+A graceful sender-side removal writes an in-band retirement frame at a group
+boundary before closing the path. The receiver therefore distinguishes an
+expected retirement from an unexpected end of stream; the latter faults an
+active RAID-0 session because the failed path may own an unpublished group.
 
 Unexpected failure differs from graceful removal. A receiver can immediately
 ignore a failed duplicate or missing erasure shard, but RAID 0 faults if the
@@ -216,7 +235,7 @@ Endpoint advertisements should use a small transport-neutral envelope with a
 scheme and opaque payload, not `IPEndPoint`. This admits DNS names, IPv4/IPv6,
 QUIC options, relays, Unix sockets, and application-defined transports. The
 application decides whether to connect and converts the advertisement into an
-`IMultipathDataLink`.
+already connected `Stream` path.
 
 Advertisements must be authenticated by the control transport or carry an
 application-verifiable signature. Automatically connecting to unauthenticated
@@ -237,44 +256,46 @@ Synchronous `Stream` methods can delegate to serialized asynchronous
 operations, but only one read and one write should be allowed concurrently.
 Membership and mode changes must serialize with group publication.
 
-## Decisions required before implementation
+## Accepted decisions
 
-1. Is the public abstraction directional, as proposed, or must one
-   `MultipathStream` be full duplex?
-2. Is best-effort UDP acceptable, or is reliable delivery over raw UDP a core
-   requirement?
-3. Does "not enough streams for erasure" mean fewer than `k + r` paths, as
-   proposed, or only fewer than the `k` paths needed to decode?
-4. Should erasure mode automatically return when `k + r` paths are healthy,
-   or require an explicit/negotiated change?
-5. In RAID 1, does a logical write succeed after one path accepts it, after all
-   current paths accept it, or only after an optional receiver acknowledgement?
-6. When no paths are healthy, should writes wait for a path, fail immediately,
-   or buffer up to a configured limit and timeout?
-7. Is the reverse control transport one reliable ordered `Stream`, or must it
-   also tolerate loss and reordering?
-8. May either peer propose modes and endpoints, or is one side authoritative?
-9. Are advertised endpoints represented as URI-like text, an opaque binary
-   application payload, or a set of built-in endpoint records?
-10. Must a newly joined path receive data already in flight, or may it start at
-    the next membership epoch as proposed?
-11. Should the first release expose only reliable `Stream` adapters and leave
-    the message-link interface internal until a UDP design is proven?
-12. What name best describes the feature: `MultipathStream`,
-    `RedundantStream`, or `ParallelRedundancyStream`?
+- The public data plane is directional. Applications compose two pairs for a
+  full-duplex logical connection.
+- The first release accepts reliable ordered `Stream` paths. Raw UDP remains a
+  future adapter with an explicitly selected reliability contract.
+- Erasure mode falls back to RAID 1 whenever fewer than `k + r` paths are
+  active, including the degenerate unprotected one-path state.
+- The desired erasure mode remains set and restores automatically when `k + r`
+  paths become active again.
+- A new path begins at a later membership epoch; old logical groups are not
+  replayed to it.
+- The sender is authoritative for mode changes. A receiver can send a request
+  through the optional control channel.
+- A RAID-1 write completes after one underlying path accepts the frame. Other
+  path writes continue through bounded per-path queues. A receiver health
+  message is advisory rather than an implicit acknowledgement for that write.
+- With no paths, data operations wait for a path subject to cancellation and
+  `PathAvailabilityTimeout`.
+- Endpoint advertisements contain a UTF-8 scheme and opaque binary application
+  data. The receiving application authenticates and interprets them.
 
-## Suggested implementation sequence
+## Implementation and verification status
 
-1. Freeze directional semantics, reliability guarantees, and mode-transition
-   authority.
-2. Specify golden binary vectors for join records and data-frame headers.
-3. Implement an internal reliable-`Stream` link adapter and bounded frame
-   parser.
-4. Implement fixed-membership RAID 1 with duplicate suppression.
-5. Add membership epochs and graceful add/remove.
-6. Add RAID 0 ordering and explicit loss faults.
-7. Reuse `ReedSolomonCodec` for erasure groups and automatic RAID 1 fallback.
-8. Add the optional control codec, negotiation, health, and advertisements.
-9. Stress cancellation, partial frames, path churn, corruption, slow paths,
-   and transitions at every frame boundary.
-10. Consider a UDP adapter only after its reliability contract is selected.
+Implemented:
+
+- versioned hello, data, completion, and control frames;
+- bounded frame payloads, checksums, and receiver reorder windows;
+- RAID 1 first-valid-copy delivery and duplicate suppression;
+- RAID 0 group scheduling and ordered recombination;
+- Reed-Solomon encoding and reconstruction through the existing codec;
+- automatic RAID 1 fallback and erasure restoration;
+- dynamic path addition and removal at membership epochs;
+- sender-controlled mode changes at complete-group boundaries;
+- reliable path, mode-request, and endpoint-advertisement control messages;
+- path initializers and configurable ownership.
+
+The first test set covers mirrored duplication, RAID 0 ordering and path churn,
+reconstruction with two absent erasure paths, fallback and restoration, writes
+waiting for their first path, and control-message round trips. Further stress
+work should randomize cancellation, partial frames, corruption, slow paths,
+queue eviction, and transitions at every group boundary before the wire format
+is declared stable. UDP remains deferred until its delivery contract is chosen.
