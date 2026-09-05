@@ -2,7 +2,7 @@
 
 All notable changes to TeeForge are documented here.
 
-## [0.1.0] - Unreleased
+## [0.1.0-rc.1] - 2026-09-05
 
 - Focus TeeForge on ordinary stream composition and optional positional I/O.
 - Keep ErasureStream headerless; callers supply geometry and member order.
@@ -58,4 +58,4 @@ All notable changes to TeeForge are documented here.
 - Add the MIT-licensed .NET 10 `System.IO.Hashing` package as the sole runtime
   NuGet dependency for incremental checksums and hashing.
 
-[0.1.0]: https://github.com/DouglasCleghorn/TeeForge/releases/tag/v0.1.0
+[0.1.0-rc.1]: https://github.com/DouglasCleghorn/TeeForge/releases/tag/v0.1.0-rc.1

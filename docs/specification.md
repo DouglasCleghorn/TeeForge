@@ -5,7 +5,7 @@ Status: accepted for implementation on 2026-08-22; updated on 2026-08-24.
 ## Package
 
 - Package ID and assembly name: `TeeForge`.
-- Version: `0.1.0`.
+- Version: `0.1.0-rc.1` (prerelease).
 - Target framework: `net10.0` only.
 - Public namespaces are organized by stable feature family:
   `TeeForge.Composition`, `TeeForge.Mirroring`, `TeeForge.Pipelines`,

@@ -3,7 +3,7 @@ param(
     [string] $PackageDirectory = "artifacts/package",
 
     [Parameter(Mandatory = $false)]
-    [string] $ExpectedVersion = "0.1.0"
+    [string] $ExpectedVersion = "0.1.0-rc.1"
 )
 
 $ErrorActionPreference = "Stop"
