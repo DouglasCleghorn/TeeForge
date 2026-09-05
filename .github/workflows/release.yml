@@ -1,95 +1,115 @@
 name: Release
 
 on:
+  release:
+    types: [published]
+  # Manual runs validate and retain a candidate; they never publish.
   workflow_dispatch:
-    inputs:
-      version:
-        description: Package version; the selected Git ref must be the matching v-prefixed tag.
-        required: true
-        default: 0.1.0
-        type: string
-      publish_to_nuget:
-        description: Exchange an OIDC token and publish to nuget.org.
-        required: true
-        default: false
-        type: boolean
 
 permissions:
   contents: read
 
-jobs:
-  release:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    environment: release
-    env:
-      PACKAGE_VERSION: ${{ inputs.version }}
-    permissions:
-      contents: read
-      id-token: write
+concurrency:
+  group: nuget-release-${{ github.event.release.tag_name || github.ref }}
+  cancel-in-progress: false
 
+jobs:
+  validate:
+    if: github.repository == 'DouglasCleghorn/TeeForge'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.release.outputs.version }}
     steps:
-      - name: Check out selected ref
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
           persist-credentials: false
-
-      - name: Verify tag and requested version
-        shell: pwsh
-        run: |
-          if ($env:PACKAGE_VERSION -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$') {
-            throw 'Expected a three-part package version with an optional prerelease suffix.'
-          }
-          $expectedTag = "v$env:PACKAGE_VERSION"
-          $actualTag = git describe --tags --exact-match HEAD
-          if ($LASTEXITCODE -ne 0 -or $actualTag -ne $expectedTag -or
-              $env:GITHUB_REF -ne "refs/tags/$expectedTag") {
-            throw "Selected ref must point exactly at tag '$expectedTag'; found '$actualTag'."
-          }
-
-      - name: Set up .NET
-        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
           dotnet-version: 10.0.400
-          cache: true
-          cache-dependency-path: '**/packages.lock.json'
-
-      - name: Restore locked dependencies
-        run: dotnet restore TeeForge.Core.slnx --locked-mode
-
-      - name: Build
-        run: dotnet build TeeForge.Core.slnx -c Release --no-restore -p:Version="$PACKAGE_VERSION"
-
-      - name: Test
-        run: dotnet test --project tests/TeeForge.Tests/TeeForge.Tests.csproj -c Release --no-build --no-restore --minimum-expected-tests 1
-
-      - name: Stress
-        run: dotnet run -c Release --project tests/TeeForge.StressTests --no-build -- 50
-
-      - name: Pack
-        run: dotnet pack src/TeeForge/TeeForge.csproj -c Release --no-build --no-restore -p:PackageVersion="$PACKAGE_VERSION" -o artifacts/package
-
-      - name: Verify package contents
+      - name: Validate version and release ancestry
+        id: release
         shell: pwsh
-        run: ./eng/verify-package.ps1 -ExpectedVersion $env:PACKAGE_VERSION
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_IS_PRERELEASE: ${{ github.event.release.prerelease }}
+          PUBLISHING_ENABLED: ${{ vars.NUGET_PUBLISH_ENABLED }}
+        run: |
+          if ($env:GITHUB_EVENT_NAME -eq 'release' -and $env:PUBLISHING_ENABLED -cne 'true') {
+            throw 'Publishing is disabled. Configure the required-reviewer nuget environment and trusted publisher before enabling NUGET_PUBLISH_ENABLED.'
+          }
+          $version = ./eng/verify-release.ps1 -EventName $env:GITHUB_EVENT_NAME -Tag $env:RELEASE_TAG -IsPrerelease ($env:RELEASE_IS_PRERELEASE -eq 'true') -ExpectedCommit $env:GITHUB_SHA
+          "version=$version" >> $env:GITHUB_OUTPUT
 
-      - name: Upload release candidate
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+  checks:
+    needs: validate
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  publish:
+    if: github.event_name == 'release'
+    needs: [validate, checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: nuget
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      # Publish exactly the checked artifact; no checkout or build with publishing permissions.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: TeeForge-${{ inputs.version }}
-          path: artifacts/package/*
-          if-no-files-found: error
-
+          name: nuget-package
+          path: package
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: 10.0.400
+      - name: Verify exact artifact before requesting credentials
+        id: package
+        env:
+          PACKAGE_VERSION: ${{ needs.validate.outputs.version }}
+          NUGET_USER: ${{ vars.NUGET_USER }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:NUGET_USER)) { throw 'Configure NUGET_USER in the nuget environment.' }
+          $version = $env:PACKAGE_VERSION
+          if ($version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$') { throw 'Invalid package version.' }
+          $expectedNames = @("TeeForge.$version.nupkg", "TeeForge.$version.snupkg", 'SHA256SUMS') | Sort-Object
+          $files = @(Get-ChildItem package -Recurse -File)
+          $actualNames = @($files | ForEach-Object Name | Sort-Object)
+          if ($files.Count -ne 3 -or (Compare-Object $expectedNames $actualNames -CaseSensitive)) { throw 'Unexpected release artifact contents.' }
+          $expectedSums = @(Get-Content package/SHA256SUMS)
+          $actualSums = @()
+          foreach ($name in @("TeeForge.$version.nupkg", "TeeForge.$version.snupkg") | Sort-Object) {
+            $path = Join-Path package $name
+            $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            $actualSums += "$hash  $name"
+            $archive = [IO.Compression.ZipFile]::OpenRead((Resolve-Path -LiteralPath $path).Path)
+            try {
+              $reader = [IO.StreamReader]::new($archive.GetEntry('TeeForge.nuspec').Open())
+              try { [xml]$spec = $reader.ReadToEnd() } finally { $reader.Dispose() }
+              $metadata = $spec.package.metadata
+              if ($metadata.id -cne 'TeeForge' -or $metadata.version -cne $version -or
+                  $metadata.repository.commit -cne $env:GITHUB_SHA -or
+                  $metadata.repository.url -cne 'https://github.com/DouglasCleghorn/TeeForge') {
+                throw 'Package identity, version, or source does not match the release.'
+              }
+            } finally { $archive.Dispose() }
+          }
+          if ($expectedSums.Count -ne 2 -or (Compare-Object $expectedSums $actualSums -CaseSensitive)) { throw 'Package checksum mismatch.' }
+          "path=$((Resolve-Path -LiteralPath "package/TeeForge.$version.nupkg").Path)" >> $env:GITHUB_OUTPUT
       - name: Obtain short-lived NuGet credential
-        if: inputs.publish_to_nuget
-        id: nuget-login
-        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
+        id: login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
         with:
           user: ${{ vars.NUGET_USER }}
-
-      - name: Publish to nuget.org
-        if: inputs.publish_to_nuget
+      - name: Publish validated package and symbols
         env:
-          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
-        run: dotnet nuget push 'artifacts/package/*.nupkg' --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+          PACKAGE_FILE: ${{ steps.package.outputs.path }}
+        run: dotnet nuget push $env:PACKAGE_FILE --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json

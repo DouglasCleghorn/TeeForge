@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -63,13 +64,26 @@ jobs:
       - name: Verify package contents
         if: runner.os == 'Linux'
         shell: pwsh
-        run: ./eng/verify-package.ps1
+        run: |
+          $version = dotnet msbuild src/TeeForge/TeeForge.csproj -nologo -getProperty:PackageVersion
+          if ($LASTEXITCODE -ne 0) { throw 'Could not evaluate the package version.' }
+          ./eng/verify-package.ps1 -ExpectedVersion $version.Trim()
+
+      - name: Record package checksums
+        if: runner.os == 'Linux'
+        shell: pwsh
+        run: |
+          $lines = Get-ChildItem artifacts/package -File | Sort-Object Name | ForEach-Object {
+            $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          }
+          $lines | Set-Content artifacts/package/SHA256SUMS -Encoding utf8NoBOM
 
       - name: Upload package
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: TeeForge-0.1.0
+          name: nuget-package
           path: artifacts/package/*
           if-no-files-found: error
 
