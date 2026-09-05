@@ -1,301 +1,278 @@
-# MultipathStream design
+# Multipath streams
 
-Status: initial reliable-`Stream` implementation and version-1 protocol draft.
+Status: implemented for reliable ordered `Stream` paths. The version-1 wire
+format remains experimental. Acknowledgements, retransmission, and UDP adapters
+are not implemented.
 
-## Purpose
+`TeeForge.Networking.MultipathSenderStream` distributes a logical byte sequence
+across application-supplied paths. `MultipathReceiverStream` reorders,
+deduplicates, or reconstructs groups and exposes sequential reads. Both derive
+from `Stream`, are non-seekable, and support only their named direction.
+Compose two sender/receiver pairs for full duplex.
 
-`MultipathStream` combines several independently supplied transports into one
-ordered logical byte stream. It is inspired by Parallel Redundancy Protocol
-(PRP), but it is not an IEC 62439-3 implementation: in addition to sending
-duplicate data, it can stripe data or generate erasure shards.
+Paths can be `NamedQuicStream` instances or other reliable ordered streams.
+The application opens and authenticates transports. The core does not open
+sockets, resolve endpoints, authenticate peers, or implement Ethernet PRP or
+IEC 62439-3. Paths sharing an underlying connection may share a failure domain;
+path count alone does not establish independence.
 
-The intended first transport is `NamedQuicStream`. The framing and scheduling
-layer must not depend on QUIC, IP addressing, or certificate types. An
-application may therefore use another reliable `Stream`, or implement a
-packet-transport adapter for a datagram protocol such as UDP.
+## Working example
 
-## Goals
-
-- Preserve one ordered logical byte sequence across multiple data paths.
-- Add and remove data paths while the logical stream is active.
-- Change distribution mode at an unambiguous frame boundary.
-- Support RAID-1-like mirroring, RAID-0-like striping, and systematic
-  Reed-Solomon erasure coding with configurable data and parity shard counts.
-- Keep a configured erasure mode as the desired mode, but automatically use
-  mirrored delivery while too few healthy paths exist for that erasure
-  configuration. Restore erasure coding at a later boundary when capacity
-  returns.
-- Optionally use a reverse control path for acknowledgements, path-health
-  reports, mode requests, and endpoint advertisements.
-- Allow application code to initialize and authenticate a newly connected
-  transport before MultipathStream takes ownership of its bytes.
-
-## Non-goals
-
-- Compatibility with Ethernet PRP frame formats or RedBox devices.
-- Opening sockets, resolving advertised endpoints, or choosing an application
-  authentication policy inside the core multipath layer.
-- Hiding the very different durability guarantees of a reliable byte stream
-  and an unreliable datagram transport.
-- Recovering RAID-0 data assigned to a path that fails before delivering it.
-
-## Public shape
-
-The data plane should initially be directional rather than pretending every
-transport is full duplex:
-
-- a sender accepts logical writes and emits framed data on active paths;
-- a receiver consumes framed data paths, reorders and reconstructs frames, and
-  exposes logical reads;
-- an optional reverse control transport connects the receiver to the sender.
-
-Two sender/receiver pairs can be composed when an application needs a
-full-duplex logical connection. This model also admits QUIC unidirectional
-streams and UDP without reserving an otherwise unused data direction.
-
-The first implementation accepts reliable ordered `Stream` paths directly and
-adds a length prefix and exact-read loop. Each receiver path has an independent
-frame pump, so a stalled byte-stream path does not block parsing on every other
-path. A future UDP adapter would preserve one protocol frame per datagram and
-impose a maximum frame size.
-
-The principal API is:
+This .NET 10 example uses two in-process pipes as connected transports. Sending
+and receiving run concurrently so bounded queues and transport backpressure can
+make progress. In a network application, these operations run at their
+respective endpoints.
 
 ```csharp
-public enum MultipathStreamMode
-{
-    Raid1,
-    Raid0,
-    ErasureCode,
-}
+using System.IO.Pipelines;
+using TeeForge.Networking;
 
-public class MultipathStreamOptions
-{
-    public MultipathStreamMode Mode { get; }
-    public int FramePayloadSize { get; }
-    public int ErasureDataShardCount { get; }
-    public int ErasureParityShardCount { get; }
-    public bool LeaveOpen { get; }
-}
-
+using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+CancellationToken token = timeout.Token;
 var options = new MultipathStreamOptions(
-    mode: MultipathStreamMode.ErasureCode,
-    erasureDataShardCount: 4,
-    erasureParityShardCount: 2);
+    mode: MultipathStreamMode.Raid1,
+    framePayloadSize: 16 * 1024,
+    pathAvailabilityTimeout: TimeSpan.FromSeconds(5));
 
 await using var sender = new MultipathSenderStream(options);
 await using var receiver = new MultipathReceiverStream(sender.SessionId, options);
+for (int index = 0; index < 2; index++)
+{
+    var pipe = new Pipe();
+    Task<Guid> joinSender = sender.AddPathAsync(pipe.Writer.AsStream(), token).AsTask();
+    Task<Guid> joinReceiver = receiver.AddPathAsync(pipe.Reader.AsStream(), token).AsTask();
+    await Task.WhenAll(joinSender, joinReceiver);
+    // The receiver reads the same path ID that the sender generated.
+}
 
-Guid senderPathId = await sender.AddPathAsync(outboundStream);
-Guid receiverPathId = await receiver.AddPathAsync(inboundStream);
+byte[] payload = new byte[1024 * 1024];
+Random.Shared.NextBytes(payload);
+using var source = new MemoryStream(payload);
+using var destination = new MemoryStream();
+Task receive = receiver.CopyToAsync(destination, token);
+Task send = SendAsync();
+await Task.WhenAll(send, receive);
+Console.WriteLine(payload.AsSpan().SequenceEqual(destination.ToArray()));
 
-await sender.WriteAsync(payload);
-await sender.CompleteAsync();
-await receiver.CopyToAsync(destination);
+async Task SendAsync()
+{
+    await source.CopyToAsync(sender, token);
+    await sender.CompleteAsync(token);
+}
 ```
 
-`AddPathAsync` also has an initializer overload. The initializer runs before
-the sender writes, or the receiver reads, the multipath hello. `RemovePathAsync`
-changes later groups without changing the interpretation of frames already in
-flight. `ChangeModeAsync` flushes the current partial group before making the
-sender's new desired mode effective. A sender calls `CompleteAsync` to flush its
-last partial group and publish logical EOF; disposing it without completion is
-an abort and may discard buffered bytes.
+Run initializers concurrently at the two endpoints if their greetings require
+bidirectional interaction. An initializer runs before the multipath hello.
+The sender writes and flushes the hello; the receiver reads and validates it.
 
-`MultipathControlChannel` independently frames `MultipathControlMessage`
-instances on an optional reliable control `Stream`. Applications receive a
-mode request or endpoint advertisement, apply their own authorization policy,
-and then call `ChangeModeAsync` or connect and add the suggested path.
+## Modes and local status
 
-## Data-plane protocol
+Write-call boundaries are not preserved. A group holds up to `FramePayloadSize`
+bytes in RAID 1 or RAID 0, or `ErasureDataShardCount * FramePayloadSize` bytes in
+erasure mode. Flush publishes a partial group. Erasure shards retain their
+configured size and pad unused space; logical length removes padding on receipt.
 
-Every frame needs a versioned, fixed-size header containing at least:
+| Mode | Publication threshold | Receiver behavior | Failure behavior |
+| --- | --- | --- | --- |
+| `Raid1` | One path write succeeds; other copies continue asynchronously | First valid copy, published in sequence; duplicates discarded | Remaining copies may preserve a group; one path provides no redundancy |
+| `Raid0` | The assigned path write succeeds | Reorders successive groups distributed across paths | An assigned-path write failure faults the sender; missing groups cannot be reconstructed |
+| `ErasureCode` | `k` shard writes succeed; other shards continue asynchronously | Any `k` valid shards reconstruct a group | Fewer than `k` successful shard writes faults the sender; reconstruction requires receipt of `k` shards |
 
-- protocol magic and version;
-- session identifier;
-- membership epoch;
-- logical group sequence number;
-- mode;
-- shard index, data-shard count, and parity-shard count;
-- logical payload length, including final-group padding information;
-- payload checksum.
+Erasure mode requires at least `k + r` locally active paths, where `k` and `r`
+are the data and parity counts. Each shard uses a distinct path. With fewer
+paths, subsequent groups use RAID 1 while desired mode remains erasure coding.
+Adding enough paths restores erasure coding. Existing groups retain their
+original metadata; new paths do not replay old groups.
 
-Multibyte integers use network byte order. The checksum detects corruption and
-misbehaving adapters; transport encryption and peer authentication remain the
-transport or application's responsibility.
+`sender.Status` captures desired/effective mode, path count, shard counts,
+membership epoch, lifecycle state, and protection under one lock. Individual
+properties remain available, but separate reads may observe different moments.
 
-Logical `Write` call boundaries are not preserved. Writes fill protocol groups
-of a configured size. `Flush` publishes a partial group so interactive traffic
-does not wait indefinitely for a full group.
+| `Status.Protection` | Local meaning |
+| --- | --- |
+| `Unavailable` | No paths, or the sender is completed, faulted, or disposed |
+| `Unprotected` | One mirrored path, or RAID 0 with any path count |
+| `Mirrored` | At least two paths available for mirrored groups |
+| `ErasureProtected` | Enough paths for all configured data and parity shards |
 
-### RAID 1
+Lifecycle states are `Open`, `Completing`, `Completed`, `Faulted`, and
+`Disposed`. Protection describes capacity for further publication, including
+pending data during completion. It does not confirm redundant delivery of a
+particular group. Underlying write success, path count, and path observations
+are not remote delivery acknowledgements.
 
-The sender places the same group sequence and payload on every selected path.
-The receiver publishes the first valid copy and discards later duplicates. A
-path failure does not delay delivery once another copy is valid.
+## Operation contract
 
-One healthy path is a valid but unprotected RAID-1 state. Zero healthy paths
-apply backpressure or fail according to a still-to-be-selected outage policy.
+| Operation | Contract |
+| --- | --- |
+| Sender `WriteAsync` / `Write` | Buffers partial groups and publishes full groups. Success can leave buffered bytes and redundant path writes running. |
+| Sender `FlushAsync` / `Flush` | Publishes buffered bytes, then waits for all current path flushes in RAID 0 or at least one successful path flush in other modes. It does not confirm receiver consumption. |
+| `ChangeModeAsync` | Publishes the previous partial group with the previous configuration, changes desired mode, and advances the epoch. The sender is authoritative. |
+| `CompleteAsync` | Publishes pending data, mirrors an EOF marker naming the next sequence, and waits for at least one successful path flush. Concurrent calls serialize; repeated successful calls are harmless. Join paths before completion, which freezes further additions. |
+| Receiver `ReadAsync` / `Read` | Returns ordered bytes. A nonempty read returns zero only after logical EOF and all preceding groups have been consumed. An empty read returns zero immediately. |
+| Receiver `FlushAsync` / `Flush` | No-op while undisposed. |
+| Sender `RemovePathAsync` | Removes a path at a publication boundary and sends retirement after queued writes. It has no cancellation parameter and can wait on a stalled path. |
+| Receiver `RemovePathAsync` | Locally stops a pump without asking the sender to retire it. Queued frames remain available; unread or staged bytes on the detached path may be lost. |
+| Disposal | Aborts the endpoint. Sender disposal without completion may discard buffered bytes. Receiver disposal wakes pending logical reads and releases queued/group buffers. |
 
-### RAID 0
+Sender writes, flushes, mode changes, completion, and graceful removal serialize
+with publication. Receiver reads serialize with each other. Paths can be added
+while an ordinary data operation waits for connectivity. Synchronous calls
+block on the asynchronous implementation; prefer async calls for network paths.
 
-The sender assigns consecutive groups across selected paths. The receiver
-reorders them by group sequence. There is no recovery if an assigned group is
-lost; the logical stream must fault rather than silently skip bytes.
+### Cancellation, outages, and errors
 
-### Erasure code
+Cancelled or timed-out receiver reads leave frames available for the next read.
+The receiver availability timeout runs only while no paths exist: joining an
+idle path ends it, and losing the last path starts it. It is not a deadline for
+a stalled transport or an incomplete group. Use a cancellation token for an
+overall deadline. Synchronous calls use no cancellation token.
 
-One group contains `k` systematic data shards and `r` Reed-Solomon parity
-shards. Each shard is sent on a distinct path. The receiver can publish the
-group after any `k` valid shards arrive. TeeForge's existing internal
-`ReedSolomonCodec` can encode and reconstruct the shard set.
+Sender operations without paths wait subject to cancellation and
+`PathAvailabilityTimeout`. An outage timeout is an `IOException` with a
+`TimeoutException` inner exception. The default is infinite. An unrecoverable
+gap can therefore wait indefinitely unless the application sets a timeout or
+cancels. New paths do not replay missing groups.
 
-The configured erasure mode requires at least `k + r` healthy paths. If fewer
-are available, the sender starts a new membership epoch in RAID 1. The desired
-mode remains erasure coding, so reaching `k + r` paths later starts another
-epoch and restores it. A mode never changes within a group.
+Cancelling a sender operation can leave a prefix buffered or published. There
+is no rollback or accepted-byte count. Cancellation during group publication
+faults the sender and removes interrupted write paths because a transport may
+contain a partial frame. Start a new session after that fault. Cancellation
+while merely waiting for an operation gate publishes no data. Do not blindly
+resend an entire buffer after any interrupted write. Failure after completion
+enters its publication phase faults the sender because EOF may be in flight.
 
-This fallback preserves the byte sequence but may provide only one copy when a
-single path remains. State reporting must distinguish `Mirrored`,
-`Unprotected`, and `Unavailable` rather than describing all three as healthy.
+Malformed frames fail their path; other valid copies or shards can still supply
+the group. Inconsistent group metadata, conflicting duplicate payloads, invalid
+completion sequences, and exceeded reorder limits fault the receiver. The
+current RAID-0 receiver policy is conservative: after observing any RAID-0
+data, an unexpected path failure processed before logical EOF faults the
+session, even after a later mode change. In-band retirement avoids that policy.
+Transport EOF alone is not logical EOF.
 
-## Dynamic membership
+### Ownership
 
-Each path has a stable identifier within a session. Adding or gracefully
-removing a path creates a new monotonically increasing membership epoch. The
-new set becomes active only for the next complete group; frames from an older
-epoch remain decodable under their original parameters.
+Ownership transfers only after `AddPathAsync` succeeds. After a failed or
+cancelled initializer/hello, the caller retains responsibility for a stream
+whose framing position may have changed. Do not retry a partial hello without
+an application-defined reset. A receiver can bind to its first path's session
+or require an expected session ID. Session IDs are not authentication.
 
-A newly added path first exchanges a join record containing the session ID,
-path ID, and protocol version. Its first data frame names the membership epoch
-in which it became active. This prevents an unrelated or delayed transport
-from being attached to the wrong logical stream.
+After addition, the endpoint exclusively uses the supplied stream's bytes.
+With `LeaveOpen = false`, removal, detected failure, and disposal close owned
+paths; receiver pumps also close them at completion or retirement. With
+`LeaveOpen = true`, streams stay open, but cancellation cannot immediately stop
+a transport that ignores tokens. Coordinate transport shutdown before reusing
+those bytes. Receiver-local detach is not graceful sender-side retirement.
 
-A graceful sender-side removal writes an in-band retirement frame at a group
-boundary before closing the path. The receiver therefore distinguishes an
-expected retirement from an unexpected end of stream; the latter faults an
-active RAID-0 session because the failed path may own an unpublished group.
+## Options and resource bounds
 
-Unexpected failure differs from graceful removal. A receiver can immediately
-ignore a failed duplicate or missing erasure shard, but RAID 0 faults if the
-failed path owned an unpublished group. A sender cannot know that bytes reached
-the receiver merely because an underlying write completed.
+`MultipathStreamOptions` remains shared for convenient paired construction.
+Sender settings do not constrain received metadata. Receiver limits are
+explicit and need not match the sender's initial mode.
 
-## Optional reverse control plane
+| Setting | Endpoint | Default and range |
+| --- | --- | --- |
+| `Mode` | Sender | `Raid1`; a defined mode |
+| `FramePayloadSize` | Sender | 16 KiB; 1 byte through 1 MiB per frame/shard |
+| `ErasureDataShardCount` / `ErasureParityShardCount` | Sender | 4 / 2; data >= 2, parity >= 1, total <= 255 |
+| `PathQueueCapacity` | Sender | 8 positive slots per path, including its active write |
+| `MaximumReorderGroups` | Receiver | 1024; sequence distance must be strictly less than this positive value |
+| `ReceiveQueueCapacity` | Receiver | 64 positive event slots shared by pumps |
+| `MaximumReceiveFramePayloadSize` | Receiver | 1 MiB; 1 byte through 1 MiB; checked before allocating a frame body |
+| `MaximumReceiveShardCount` | Receiver | 255; 1 through 255 total shards |
+| `MaximumReorderBytes` | Receiver | 64 MiB; positive reservation for retained groups |
+| `PathAvailabilityTimeout` | Both | Infinite when omitted; otherwise positive or `Timeout.InfiniteTimeSpan` |
+| `LeaveOpen` | Both | `false` |
 
-The reverse path carries length-delimited, versioned control messages. Proposed
-messages include:
+The bounded receiver queue waits when full and never drops frames or failure
+events to make room. Each independent pump can stage one additional frame.
+Application reads resume pumps and propagate backpressure through transports.
 
-- cumulative receive acknowledgement and selective missing-group report;
-- path accepted, healthy, degraded, or failed;
-- request or suggest mode and erasure parameters;
-- mode accepted or rejected, with the effective epoch;
-- advertise or withdraw an endpoint;
-- graceful session completion and fatal protocol error.
+The reorder byte budget reserves one payload per RAID-1/RAID-0 group. An erasure
+group reserves `(k + r) * shardSize + logicalLength`, including missing-shard
+reconstruction and decoded output, before retaining the group. Consumption
+releases the reservation. Exceeding the budget faults the receiver instead of
+waiting for space that an earlier missing group might itself need.
 
-Data frames remain self-describing. Losing the optional control path must not
-make already received groups undecodable.
+This is not a process-wide heap limit. Queue payloads occupy at most
+`ReceiveQueueCapacity * MaximumReceiveFramePayloadSize`. Each attached path
+additionally needs staging/parsing storage, temporarily up to two payload-sized
+arrays plus a header. Group metadata, codec matrices, and transport buffers are
+additional. The application controls the number of attached paths.
 
-Mode changes are negotiated rather than applied unilaterally: one peer
-proposes parameters, the other accepts or rejects them, and an accepted change
-names its first membership epoch. Endpoint advertisements are hints. The
-application validates, authorizes, and connects them before passing a new link
-to MultipathStream.
+The sender evicts a path when its send queue has no free slot. It does not
+silently drop the only RAID-0 copy. A slow redundant path can finish after an
+operation returns or be evicted as later groups fill its queue.
 
-If the reverse path is absent, the receiver can still deduplicate RAID 1 and
-reconstruct erasure groups, but the sender has no delivery acknowledgement,
-remote health information, or remote endpoint discovery.
+## Optional control channel
 
-## Reliability contract
+`MultipathControlChannel` frames messages over a separate reliable stream,
+readable, writable, or both. One send and one receive can run concurrently;
+same-direction calls serialize. Clean EOF returns `null`. Its `leaveOpen`
+argument controls ownership independently of data options. Finish or cancel
+control operations before disposal. Cancellation midway through a control frame
+does not reset framing; recreate the channel/transport.
 
-Reliable underlying streams can provide an ordered logical stream without
-protocol retransmission, subject to the selected mode's failure behavior.
-UDP cannot provide that same contract from framing and erasure coding alone:
-packets may be lost even while every path remains nominally healthy.
+Only these messages are implemented:
 
-There are two honest choices for UDP:
+| Kind | Checked accessor | Meaning |
+| --- | --- | --- |
+| `PathReceivingValidFrames` | `GetPathReceivingValidFrames()` | Returns the ID of a path observed receiving valid frames |
+| `ModeChangeRequest` | `GetModeChangeRequest()` | Returns typed mode and shard counts for authorization |
+| `EndpointAdvertisement` | `GetEndpointAdvertisement()` | Returns typed UTF-8 scheme and opaque data |
 
-1. document it as best-effort and let a missing unrecoverable group fault the
-   logical stream; or
-2. make acknowledgements, retransmission windows, timers, congestion control,
-   and bounded replay buffers a required reliability layer.
+Accessors throw `InvalidOperationException` for the wrong kind. Flat properties
+remain for compatibility and contain defaults when inapplicable. `ReliablePath`
+and `CreateReliablePath` are compatibility aliases for the new observation name
+and factory; their wire value stays zero.
 
-The second choice is substantial and overlaps protocols such as QUIC. The
-initial implementation should use reliable `Stream` links unless reliable UDP
-is an explicit requirement.
+The channel does not automatically change modes, connect endpoints, or
+acknowledge delivery. The application authorizes a request and calls
+`ChangeModeAsync`; no acceptance handshake is required by the data plane.
+Non-erasure request shard counts are zero: omit those arguments when calling
+`ChangeModeAsync` to preserve its configured erasure geometry. Authenticate and
+authorize endpoint hints before connecting and calling `AddPathAsync`.
 
-## Initialization and endpoint advertisement
+## Version-1 wire format
 
-The core should accept already connected links. A caller-supplied asynchronous
-initializer may run before the join record so an application can perform a
-transport-specific greeting or bind metadata to a connection. Once the join
-record starts, the link belongs exclusively to MultipathStream.
+A four-byte big-endian body length excludes its own prefix. Every body begins
+with four-byte magic, one-byte version, one-byte kind, and two zero reserved
+bytes. Integers and GUIDs use big-endian order. Data magic is `0x54464D50`,
+control magic is `0x54464D43`, and version is 1.
 
-Endpoint advertisements should use a small transport-neutral envelope with a
-scheme and opaque payload, not `IPEndPoint`. This admits DNS names, IPv4/IPv6,
-QUIC options, relays, Unix sockets, and application-defined transports. The
-application decides whether to connect and converts the advertisement into an
-already connected `Stream` path.
+Data body offsets exclude the length prefix:
 
-Advertisements must be authenticated by the control transport or carry an
-application-verifiable signature. Automatically connecting to unauthenticated
-advertisements would create a redirection and network-scanning primitive.
+| Kind | Body bytes | Fields after the 8-byte common header |
+| --- | --- | --- |
+| Hello (1) | 40 | Session GUID at 8; path GUID at 24 |
+| Data (2) | 60 + payload | Session GUID at 8; epoch u64 at 24; sequence u64 at 32; mode, shard index, data count, parity count at 40..43; logical length i32 at 44; payload length i32 at 48; payload XxHash64 u64 at 52; payload at 60 |
+| Complete (3) | 32 | Session GUID at 8; exclusive final sequence u64 at 24 |
+| Retire (4) | 32 | Session GUID at 8; retirement epoch u64 at 24 |
 
-## Backpressure and resource limits
+Modes encode as RAID 1 = 0, RAID 0 = 1, erasure = 2. Sequences start at zero.
+Membership and mode changes advance the epoch. Old groups remain decodable
+from their original metadata. XxHash64 covers payload bytes only and provides
+no authentication. Data frames carry no write-call boundary.
 
-The receiver needs bounded reorder and duplicate windows. A fast path must not
-allow an unlimited number of groups to accumulate while an earlier RAID-0
-group is delayed. Erasure groups release shard buffers after publication.
+Control kinds are observation = 0, mode request = 1, endpoint advertisement = 2.
+After the common header, payloads are respectively: a 16-byte path GUID; four
+bytes containing mode, data count, parity count, and zero; or a one-byte UTF-8
+scheme length, scheme bytes, two-byte big-endian data length, and opaque data.
+Scheme length is at most 255 bytes and endpoint data at most 65,535 bytes.
 
-The sender needs per-path queues so a slow mirrored path does not delay the
-first successful copy, plus explicit queue limits and an eviction policy. The
-default should remove a path that exceeds its queue budget from a later epoch;
-it must not silently discard a frame that is the only RAID-0 copy.
+## Deferred work and verification
 
-Synchronous `Stream` methods can delegate to serialized asynchronous
-operations, but only one read and one write should be allowed concurrently.
-Membership and mode changes must serialize with group publication.
+Acknowledgements, selective missing-group reports, retransmission, automatic
+remote health tracking, mode acceptance/rejection messages, endpoint withdrawal,
+and UDP adapters are proposals. Reliable UDP additionally requires replay
+buffers, timers, flow/congestion control, and an explicit reliability contract.
+Framing and erasure coding alone cannot provide reliable datagram delivery.
 
-## Accepted decisions
-
-- The public data plane is directional. Applications compose two pairs for a
-  full-duplex logical connection.
-- The first release accepts reliable ordered `Stream` paths. Raw UDP remains a
-  future adapter with an explicitly selected reliability contract.
-- Erasure mode falls back to RAID 1 whenever fewer than `k + r` paths are
-  active, including the degenerate unprotected one-path state.
-- The desired erasure mode remains set and restores automatically when `k + r`
-  paths become active again.
-- A new path begins at a later membership epoch; old logical groups are not
-  replayed to it.
-- The sender is authoritative for mode changes. A receiver can send a request
-  through the optional control channel.
-- A RAID-1 write completes after one underlying path accepts the frame. Other
-  path writes continue through bounded per-path queues. A receiver health
-  message is advisory rather than an implicit acknowledgement for that write.
-- With no paths, data operations wait for a path subject to cancellation and
-  `PathAvailabilityTimeout`.
-- Endpoint advertisements contain a UTF-8 scheme and opaque binary application
-  data. The receiving application authenticates and interprets them.
-
-## Implementation and verification status
-
-Implemented:
-
-- versioned hello, data, completion, and control frames;
-- bounded frame payloads, checksums, and receiver reorder windows;
-- RAID 1 first-valid-copy delivery and duplicate suppression;
-- RAID 0 group scheduling and ordered recombination;
-- Reed-Solomon encoding and reconstruction through the existing codec;
-- automatic RAID 1 fallback and erasure restoration;
-- dynamic path addition and removal at membership epochs;
-- sender-controlled mode changes at complete-group boundaries;
-- reliable path, mode-request, and endpoint-advertisement control messages;
-- path initializers and configurable ownership.
-
-The first test set covers mirrored duplication, RAID 0 ordering and path churn,
-reconstruction with two absent erasure paths, fallback and restoration, writes
-waiting for their first path, and control-message round trips. Further stress
-work should randomize cancellation, partial frames, corruption, slow paths,
-queue eviction, and transitions at every group boundary before the wire format
-is declared stable. UDP remains deferred until its delivery contract is chosen.
+Tests cover the three modes, path churn, reconstruction, fallback/restoration,
+mode boundaries, initializers, control round trips and checked payloads,
+timeout/cancellation recovery, bounded queue backpressure, queued failures,
+receive limits, memory reservation/release, disposal of pending reads, status
+transitions, concurrent completion, and interrupted publication. Randomized
+transport faults, partial-frame cancellation, and long-running multipath stress
+remain necessary before declaring the wire format stable.

@@ -22,6 +22,7 @@ internal sealed class MultipathReceiveGroup
         int memberCount = _mode == MultipathStreamMode.ErasureCode
             ? DataShardCount + ParityShardCount
             : 1;
+        ReservedBytes = GetReservationSize(frame);
         _shards = new byte[memberCount][];
         _present = new bool[memberCount];
         Add(frame);
@@ -32,6 +33,13 @@ internal sealed class MultipathReceiveGroup
     internal int ParityShardCount { get; }
 
     internal MultipathStreamMode Mode => _mode;
+
+    internal long ReservedBytes { get; }
+
+    internal static long GetReservationSize(MultipathReceivedFrame frame) =>
+        frame.Mode == MultipathStreamMode.ErasureCode
+            ? (long)(frame.DataShardCount + frame.ParityShardCount) * frame.Payload!.Length + frame.LogicalLength
+            : frame.Payload!.Length;
 
     internal bool IsDecodable => _decoded is not null ||
         (_mode == MultipathStreamMode.ErasureCode

@@ -167,7 +167,6 @@ TeeForge.Networking.MultipathStreamOptions.FramePayloadSize.get -> int
 TeeForge.Networking.MultipathStreamOptions.LeaveOpen.get -> bool
 TeeForge.Networking.MultipathStreamOptions.MaximumReorderGroups.get -> int
 TeeForge.Networking.MultipathStreamOptions.Mode.get -> TeeForge.Networking.MultipathStreamMode
-TeeForge.Networking.MultipathStreamOptions.MultipathStreamOptions(TeeForge.Networking.MultipathStreamMode mode = TeeForge.Networking.MultipathStreamMode.Raid1, int framePayloadSize = 16384, int erasureDataShardCount = 4, int erasureParityShardCount = 2, int pathQueueCapacity = 8, int maximumReorderGroups = 1024, System.TimeSpan? pathAvailabilityTimeout = null, bool leaveOpen = false) -> void
 TeeForge.Networking.MultipathStreamOptions.PathAvailabilityTimeout.get -> System.TimeSpan
 TeeForge.Networking.MultipathStreamOptions.PathQueueCapacity.get -> int
 override TeeForge.RandomAccess.RandomAccessMemoryStream.Capacity.get -> int
@@ -384,3 +383,41 @@ TeeForge.Networking.QuicStreamCompressionAlgorithms.All = TeeForge.Networking.Qu
 TeeForge.Networking.QuicStreamCompressionAlgorithms.BrotliFastest = 2 -> TeeForge.Networking.QuicStreamCompressionAlgorithms
 TeeForge.Networking.QuicStreamCompressionAlgorithms.BrotliOptimal = 4 -> TeeForge.Networking.QuicStreamCompressionAlgorithms
 TeeForge.Networking.QuicStreamCompressionAlgorithms.Uncompressed = 1 -> TeeForge.Networking.QuicStreamCompressionAlgorithms
+static TeeForge.Networking.MultipathControlMessage.CreatePathReceivingValidFrames(System.Guid pathId) -> TeeForge.Networking.MultipathControlMessage!
+TeeForge.Networking.MultipathControlMessage.GetEndpointAdvertisement() -> TeeForge.Networking.MultipathEndpointAdvertisement!
+TeeForge.Networking.MultipathControlMessage.GetModeChangeRequest() -> TeeForge.Networking.MultipathModeChangeRequest!
+TeeForge.Networking.MultipathControlMessage.GetPathReceivingValidFrames() -> System.Guid
+TeeForge.Networking.MultipathControlMessageKind.PathReceivingValidFrames = 0 -> TeeForge.Networking.MultipathControlMessageKind
+TeeForge.Networking.MultipathEndpointAdvertisement
+TeeForge.Networking.MultipathEndpointAdvertisement.Data.get -> System.ReadOnlyMemory<byte>
+TeeForge.Networking.MultipathEndpointAdvertisement.Scheme.get -> string!
+TeeForge.Networking.MultipathModeChangeRequest
+TeeForge.Networking.MultipathModeChangeRequest.DataShardCount.get -> int
+TeeForge.Networking.MultipathModeChangeRequest.Mode.get -> TeeForge.Networking.MultipathStreamMode
+TeeForge.Networking.MultipathModeChangeRequest.ParityShardCount.get -> int
+TeeForge.Networking.MultipathProtectionState
+TeeForge.Networking.MultipathProtectionState.ErasureProtected = 3 -> TeeForge.Networking.MultipathProtectionState
+TeeForge.Networking.MultipathProtectionState.Mirrored = 2 -> TeeForge.Networking.MultipathProtectionState
+TeeForge.Networking.MultipathProtectionState.Unavailable = 0 -> TeeForge.Networking.MultipathProtectionState
+TeeForge.Networking.MultipathProtectionState.Unprotected = 1 -> TeeForge.Networking.MultipathProtectionState
+TeeForge.Networking.MultipathSenderState
+TeeForge.Networking.MultipathSenderState.Completed = 2 -> TeeForge.Networking.MultipathSenderState
+TeeForge.Networking.MultipathSenderState.Completing = 1 -> TeeForge.Networking.MultipathSenderState
+TeeForge.Networking.MultipathSenderState.Disposed = 4 -> TeeForge.Networking.MultipathSenderState
+TeeForge.Networking.MultipathSenderState.Faulted = 3 -> TeeForge.Networking.MultipathSenderState
+TeeForge.Networking.MultipathSenderState.Open = 0 -> TeeForge.Networking.MultipathSenderState
+TeeForge.Networking.MultipathSenderStatus
+TeeForge.Networking.MultipathSenderStatus.DesiredMode.get -> TeeForge.Networking.MultipathStreamMode
+TeeForge.Networking.MultipathSenderStatus.EffectiveMode.get -> TeeForge.Networking.MultipathStreamMode
+TeeForge.Networking.MultipathSenderStatus.ErasureDataShardCount.get -> int
+TeeForge.Networking.MultipathSenderStatus.ErasureParityShardCount.get -> int
+TeeForge.Networking.MultipathSenderStatus.MembershipEpoch.get -> ulong
+TeeForge.Networking.MultipathSenderStatus.PathCount.get -> int
+TeeForge.Networking.MultipathSenderStatus.Protection.get -> TeeForge.Networking.MultipathProtectionState
+TeeForge.Networking.MultipathSenderStatus.State.get -> TeeForge.Networking.MultipathSenderState
+TeeForge.Networking.MultipathSenderStream.Status.get -> TeeForge.Networking.MultipathSenderStatus!
+TeeForge.Networking.MultipathStreamOptions.MaximumReceiveFramePayloadSize.get -> int
+TeeForge.Networking.MultipathStreamOptions.MaximumReceiveShardCount.get -> int
+TeeForge.Networking.MultipathStreamOptions.MaximumReorderBytes.get -> long
+TeeForge.Networking.MultipathStreamOptions.MultipathStreamOptions(TeeForge.Networking.MultipathStreamMode mode = TeeForge.Networking.MultipathStreamMode.Raid1, int framePayloadSize = 16384, int erasureDataShardCount = 4, int erasureParityShardCount = 2, int pathQueueCapacity = 8, int maximumReorderGroups = 1024, System.TimeSpan? pathAvailabilityTimeout = null, bool leaveOpen = false, int receiveQueueCapacity = 64, int maximumReceiveFramePayloadSize = 1048576, int maximumReceiveShardCount = 255, long maximumReorderBytes = 67108864) -> void
+TeeForge.Networking.MultipathStreamOptions.ReceiveQueueCapacity.get -> int

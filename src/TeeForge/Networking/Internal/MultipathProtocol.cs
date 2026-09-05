@@ -99,9 +99,11 @@ internal static class MultipathProtocol
         Stream stream,
         Guid expectedSessionId,
         Guid pathId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int maximumPayloadSize = MaximumFramePayloadSize,
+        int maximumShardCount = byte.MaxValue)
     {
-        MultipathRawFrame raw = await ReadFrameAsync(stream, cancellationToken).ConfigureAwait(false);
+        MultipathRawFrame raw = await ReadFrameAsync(stream, cancellationToken, maximumPayloadSize).ConfigureAwait(false);
         ReadOnlySpan<byte> body = raw.Body;
 
         if (raw.Type == MultipathFrameType.Complete)
@@ -144,8 +146,8 @@ internal static class MultipathProtocol
 
         int logicalLength = BinaryPrimitives.ReadInt32BigEndian(body.Slice(44, 4));
         int payloadLength = BinaryPrimitives.ReadInt32BigEndian(body.Slice(48, 4));
-        if (logicalLength < 0 || payloadLength < 0 ||
-            payloadLength > MaximumFramePayloadSize || body.Length != DataHeaderSize + payloadLength)
+        if (logicalLength <= 0 || payloadLength <= 0 ||
+            payloadLength > maximumPayloadSize || body.Length != DataHeaderSize + payloadLength)
         {
             throw new InvalidDataException("The data frame contains invalid lengths.");
         }
@@ -153,6 +155,10 @@ internal static class MultipathProtocol
         byte dataShardCount = body[42];
         byte parityShardCount = body[43];
         byte shardIndex = body[41];
+        if (dataShardCount + parityShardCount > maximumShardCount)
+        {
+            throw new InvalidDataException("The data frame exceeds the receiver shard limit.");
+        }
         ValidateShardMetadata(mode, shardIndex, dataShardCount, parityShardCount, logicalLength, payloadLength);
 
         byte[] payload = body.Slice(DataHeaderSize, payloadLength).ToArray();
@@ -187,12 +193,13 @@ internal static class MultipathProtocol
 
     private static async ValueTask<MultipathRawFrame> ReadFrameAsync(
         Stream stream,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int maximumPayloadSize = MaximumFramePayloadSize)
     {
         byte[] prefix = new byte[sizeof(int)];
         await ReadExactlyAsync(stream, prefix, allowEndOfStream: false, cancellationToken).ConfigureAwait(false);
         int bodyLength = BinaryPrimitives.ReadInt32BigEndian(prefix);
-        if (bodyLength < CommonHeaderSize || bodyLength > DataHeaderSize + MaximumFramePayloadSize)
+        if (bodyLength < CommonHeaderSize || bodyLength > DataHeaderSize + maximumPayloadSize)
         {
             throw new InvalidDataException("The path frame length is invalid.");
         }

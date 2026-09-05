@@ -421,7 +421,7 @@ See [the stream guide](https://github.com/DouglasCleghorn/TeeForge/blob/main/doc
 ## Documentation
 
 - [Behavioral specification](https://github.com/DouglasCleghorn/TeeForge/blob/main/docs/specification.md)
-- [Multipath stream design](https://github.com/DouglasCleghorn/TeeForge/blob/main/docs/multipath-stream.md)
+- [Multipath streams: usage, guarantees, and wire format](https://github.com/DouglasCleghorn/TeeForge/blob/main/docs/multipath-stream.md)
 - [Architecture decisions](https://github.com/DouglasCleghorn/TeeForge/tree/main/docs/adr)
 - [Benchmark evidence](https://github.com/DouglasCleghorn/TeeForge/tree/main/docs/benchmarks)
 - [Changelog](https://github.com/DouglasCleghorn/TeeForge/blob/main/CHANGELOG.md)

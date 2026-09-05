@@ -34,6 +34,11 @@ All notable changes to TeeForge are documented here.
 - Add directional `MultipathSenderStream` and `MultipathReceiverStream` data
   paths with dynamic membership, RAID 1, RAID 0, Reed-Solomon erasure coding,
   automatic mirrored fallback, and an optional reliable control channel.
+- Bound multipath receive queues and reorder memory, preserve frames across
+  read timeouts and cancellation, and wake pending reads on disposal. Add
+  atomic sender status and checked control-message payloads, serialize
+  completion calls, and fault interrupted group publication. Document current
+  operation, ownership, outage, and wire-format contracts separately from proposals.
 
 - Organize public APIs into shallow feature namespaces and name the
   random-access capability family `ITeeRandomAccessStream`,

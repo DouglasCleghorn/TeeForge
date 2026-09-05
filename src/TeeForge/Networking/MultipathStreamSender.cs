@@ -17,6 +17,7 @@ public class MultipathSenderStream : Stream
     private readonly MultipathStreamOptions _options;
     private readonly SemaphoreSlim _membershipGate = new(1, 1);
     private readonly SemaphoreSlim _writeGate = new(1, 1);
+    private readonly SemaphoreSlim _completionGate = new(1, 1);
     private TaskCompletionSource<bool> _pathAvailable = CreateAvailabilitySource();
     private byte[] _pending = [];
     private int _pendingCount;
@@ -55,6 +56,32 @@ public class MultipathSenderStream : Stream
 
     /// <summary>Gets the identifier included in every path and data frame for this session.</summary>
     public Guid SessionId { get; }
+
+    /// <summary>Gets an atomic snapshot of local mode, protection, membership, and lifecycle state.</summary>
+    /// <remarks>The snapshot does not confirm delivery or remote path health.</remarks>
+    public MultipathSenderStatus Status
+    {
+        get
+        {
+            lock (_stateLock)
+            {
+                MultipathStreamMode effective = ResolveEffectiveMode(_paths.Count, _desiredMode, _dataShardCount, _parityShardCount);
+                MultipathSenderState state = _disposeState != 0 ? MultipathSenderState.Disposed
+                    : _fault is not null ? MultipathSenderState.Faulted
+                    : _completeState == 2 ? MultipathSenderState.Completed
+                    : _completeState == 1 ? MultipathSenderState.Completing
+                    : MultipathSenderState.Open;
+                MultipathProtectionState protection = _paths.Count == 0 ||
+                    state is MultipathSenderState.Disposed or MultipathSenderState.Faulted or MultipathSenderState.Completed
+                    ? MultipathProtectionState.Unavailable
+                    : effective == MultipathStreamMode.ErasureCode ? MultipathProtectionState.ErasureProtected
+                    : effective == MultipathStreamMode.Raid0 || _paths.Count == 1 ? MultipathProtectionState.Unprotected
+                    : MultipathProtectionState.Mirrored;
+                return new MultipathSenderStatus(_desiredMode, effective, _paths.Count, _dataShardCount,
+                    _parityShardCount, _epoch, state, protection);
+            }
+        }
+    }
 
     /// <summary>Gets the currently requested distribution mode.</summary>
     public MultipathStreamMode DesiredMode
@@ -137,6 +164,7 @@ public class MultipathSenderStream : Stream
     }
 
     /// <summary>Adds a writable path and returns its generated path identifier.</summary>
+    /// <remarks>Ownership transfers only on success. On failure, the caller owns a possibly partially initialized stream.</remarks>
     public ValueTask<Guid> AddPathAsync(
         Stream path,
         CancellationToken cancellationToken = default) =>
@@ -153,6 +181,7 @@ public class MultipathSenderStream : Stream
     }
 
     /// <summary>Gracefully removes a path from groups created after this call.</summary>
+    /// <remarks>Waits for queued writes and an in-band retirement frame. A stalled path can delay this operation.</remarks>
     public async ValueTask<bool> RemovePathAsync(Guid pathId)
     {
         ThrowIfDisposed();
@@ -200,6 +229,7 @@ public class MultipathSenderStream : Stream
     }
 
     /// <summary>Changes the desired mode at the next complete logical group.</summary>
+    /// <remarks>Publishes buffered bytes using the previous configuration. The sender applies the change without control-plane negotiation.</remarks>
     public async ValueTask ChangeModeAsync(
         MultipathStreamMode mode,
         int? erasureDataShardCount = null,
@@ -237,16 +267,34 @@ public class MultipathSenderStream : Stream
     }
 
     /// <summary>Flushes pending data and sends an end-of-stream marker.</summary>
+    /// <remarks>Concurrent completion calls are serialized. Success is local publication, not remote acknowledgement.</remarks>
     public async ValueTask CompleteAsync(CancellationToken cancellationToken = default)
+    {
+        await _completionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await CompleteSerializedAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _completionGate.Release();
+        }
+    }
+
+    private async ValueTask CompleteSerializedAsync(CancellationToken cancellationToken)
     {
         ThrowIfDisposed();
         await _membershipGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             ThrowIfDisposed();
-            if (Interlocked.CompareExchange(ref _completeState, 1, 0) != 0)
+            lock (_stateLock)
             {
-                return;
+                if (_completeState == 2)
+                {
+                    return;
+                }
+                Volatile.Write(ref _completeState, 1);
             }
         }
         finally
@@ -260,17 +308,19 @@ public class MultipathSenderStream : Stream
         }
         catch
         {
-            Volatile.Write(ref _completeState, 0);
+            SetCompletionState(0);
             throw;
         }
 
         try
         {
             await CompleteCoreAsync(cancellationToken).ConfigureAwait(false);
+            SetCompletionState(2);
         }
-        catch
+        catch (Exception exception)
         {
-            Volatile.Write(ref _completeState, 0);
+            Fault(new IOException("Logical completion failed; the session cannot safely be resumed.", exception));
+            SetCompletionState(0);
             throw;
         }
         finally
@@ -282,7 +332,8 @@ public class MultipathSenderStream : Stream
     /// <inheritdoc/>
     public override void Flush() => FlushAsync(CancellationToken.None).GetAwaiter().GetResult();
 
-    /// <inheritdoc/>
+    /// <summary>Publishes a partial group and flushes all RAID-0 paths, or at least one path in other modes.</summary>
+    /// <remarks>Success does not acknowledge remote delivery. Other queued path operations may still be running.</remarks>
     public override async Task FlushAsync(CancellationToken cancellationToken)
     {
         ThrowIfUnavailableForWrite();
@@ -325,7 +376,12 @@ public class MultipathSenderStream : Stream
         return WriteAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
     }
 
-    /// <inheritdoc/>
+    /// <summary>Buffers logical bytes and publishes full groups using the active distribution mode.</summary>
+    /// <remarks>
+    /// A partial group remains buffered until flush, mode change, or completion. Publication waits
+    /// for one path write in RAID 1, the assigned path in RAID 0, or k path writes in erasure mode.
+    /// Cancellation after publication begins faults the sender because bytes may already be in flight.
+    /// </remarks>
     public override async ValueTask WriteAsync(
         ReadOnlyMemory<byte> buffer,
         CancellationToken cancellationToken = default)
@@ -379,7 +435,7 @@ public class MultipathSenderStream : Stream
         if (disposing && Volatile.Read(ref _disposeState) == 0)
         {
             _membershipGate.Wait();
-            if (Interlocked.Exchange(ref _disposeState, 1) == 0)
+            if (TryMarkDisposed())
             {
                 try
                 {
@@ -411,7 +467,7 @@ public class MultipathSenderStream : Stream
         if (Volatile.Read(ref _disposeState) == 0)
         {
             await _membershipGate.WaitAsync().ConfigureAwait(false);
-            if (Interlocked.Exchange(ref _disposeState, 1) == 0)
+            if (TryMarkDisposed())
             {
                 try
                 {
@@ -519,7 +575,15 @@ public class MultipathSenderStream : Stream
         CancellationToken cancellationToken)
     {
         byte[] payload = _pending.AsSpan(0, byteCount).ToArray();
-        await SendGroupAsync(payload, snapshot, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await SendGroupAsync(payload, snapshot, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException exception)
+        {
+            Fault(new IOException("Group publication was cancelled; delivery is indeterminate. Start a new session.", exception));
+            throw;
+        }
         _pendingCount -= byteCount;
         if (_pendingCount > 0)
         {
@@ -563,9 +627,13 @@ public class MultipathSenderStream : Stream
             {
                 await snapshot.Paths[index].SendAsync(frame, cancellationToken).ConfigureAwait(false);
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (Exception exception)
             {
                 await FailPathAsync(snapshot.Paths[index]).ConfigureAwait(false);
+                if (exception is OperationCanceledException)
+                {
+                    throw;
+                }
                 Fault(new IOException("A RAID-0 path failed after being assigned a logical group.", exception));
                 ThrowIfFaulted();
             }
@@ -650,8 +718,10 @@ public class MultipathSenderStream : Stream
         {
             await path.SendAsync(frame, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch
         {
+            // Cancellation can interrupt a framed write after its prefix reached the transport.
+            // Never reuse that path, including a slow replica cancelled after another succeeded.
             await FailPathAsync(path).ConfigureAwait(false);
             throw;
         }
@@ -847,7 +917,34 @@ public class MultipathSenderStream : Stream
         }
     }
 
-    private void Fault(Exception exception) => Interlocked.CompareExchange(ref _fault, exception, null);
+    private void Fault(Exception exception)
+    {
+        lock (_stateLock)
+        {
+            _fault ??= exception;
+        }
+    }
+
+    private void SetCompletionState(int state)
+    {
+        lock (_stateLock)
+        {
+            Volatile.Write(ref _completeState, state);
+        }
+    }
+
+    private bool TryMarkDisposed()
+    {
+        lock (_stateLock)
+        {
+            if (_disposeState != 0)
+            {
+                return false;
+            }
+            Volatile.Write(ref _disposeState, 1);
+            return true;
+        }
+    }
 
     private void ThrowIfFaulted()
     {
