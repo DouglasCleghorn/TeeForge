@@ -24,7 +24,12 @@ internal sealed class ReedSolomonCodec : IReedSolomonCodec
         int parityShardCount,
         ReedSolomonAcceleration acceleration = ReedSolomonAcceleration.Auto)
     {
-        _ = ErasureFormatV1.CalculateReadQuorum(dataShardCount, parityShardCount);
+        ArgumentOutOfRangeException.ThrowIfLessThan(dataShardCount, 2);
+        ArgumentOutOfRangeException.ThrowIfLessThan(parityShardCount, 1);
+        if ((long)dataShardCount + parityShardCount > byte.MaxValue)
+        {
+            throw new ArgumentOutOfRangeException(nameof(parityShardCount));
+        }
 
         if (!Enum.IsDefined(acceleration))
         {

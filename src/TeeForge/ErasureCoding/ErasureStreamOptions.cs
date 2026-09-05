@@ -1,6 +1,6 @@
 namespace TeeForge.ErasureCoding;
 
-/// <summary>Configures format, cache, availability, and ownership for an <see cref="ErasureStream"/>.</summary>
+/// <summary>Configures cache, availability, and ownership for an <see cref="ErasureStream"/>.</summary>
 public class ErasureStreamOptions
 {
     /// <summary>The benchmark-selected default member block size.</summary>
@@ -11,29 +11,19 @@ public class ErasureStreamOptions
 
     /// <summary>Initializes options.</summary>
     public ErasureStreamOptions(
-        ErasureStreamFormat format = ErasureStreamFormat.SelfDescribing,
         bool requireAllMembers = true,
         bool leaveOpen = false,
         long maximumCacheBytes = 64L * 1024 * 1024,
         int readAheadBlockCount = 1)
     {
-        if (!Enum.IsDefined(format))
-        {
-            throw new ArgumentOutOfRangeException(nameof(format));
-        }
-
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumCacheBytes);
         ArgumentOutOfRangeException.ThrowIfNegative(readAheadBlockCount);
 
-        Format = format;
         RequireAllMembers = requireAllMembers;
         LeaveOpen = leaveOpen;
         MaximumCacheBytes = maximumCacheBytes;
         ReadAheadBlockCount = readAheadBlockCount;
     }
-
-    /// <summary>Gets the member format used when creating or opening a stream.</summary>
-    public ErasureStreamFormat Format { get; }
 
     /// <summary>Gets whether opening requires every configured member.</summary>
     public bool RequireAllMembers { get; }

@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/TeeForge.Benchmarks/TeeForge.Benchmarks.csproj" />
+    <Project Path="benchmarks/TeeForge.QuicBench.Client/TeeForge.QuicBench.Client.csproj" />
+    <Project Path="benchmarks/TeeForge.QuicBench.Server/TeeForge.QuicBench.Server.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/TeeForge/TeeForge.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TeeForge.AotSmoke/TeeForge.AotSmoke.csproj" />
+    <Project Path="tests/TeeForge.StressTests/TeeForge.StressTests.csproj" />
+    <Project Path="tests/TeeForge.Tests/TeeForge.Tests.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/TeeForge.Streaming/TeeForge.Streaming.csproj" />
+  </Folder>
+</Solution>

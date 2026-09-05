@@ -1,5 +1,8 @@
 # Use shallow feature namespaces
 
+Historical decision: storage examples below are superseded by [ADR 0035](0035-focus-the-package-on-stream-composition.md). The current core namespace list is in the behavioral specification.
+
+
 TeeForge's public API has grown beyond the small surface assumed by ADR 0002.
 Keeping every public type in the root namespace makes unrelated facilities
 appear together and increases simple-name collision risk for generic

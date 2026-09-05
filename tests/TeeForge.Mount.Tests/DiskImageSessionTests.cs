@@ -1,4 +1,4 @@
-using TeeForge.Sparse;
+using TeeForge.Experimental.Storage.Sparse;
 
 namespace TeeForge.Mount.Tests;
 
@@ -18,11 +18,11 @@ public class DiskImageSessionTests
         {
             Guid baseDataWriteId;
             using (var baseStorage = new FileStream(basePath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
-            using (DynamicAllocationStream baseDisk = DynamicAllocationStream.Create(
+            using (SparseDiskImage baseDisk = SparseDiskImage.Create(
                 baseStorage,
                 Capacity,
                 BlockSize,
-                new DynamicAllocationStreamOptions(
+                new SparseDiskImageOptions(
                     leaveOpen: true,
                     freeBlockQueueCapacity: 0,
                     freeBlockQueueLowWatermark: 0)))
@@ -35,10 +35,10 @@ public class DiskImageSessionTests
                     FileMode.CreateNew,
                     FileAccess.ReadWrite,
                     FileShare.None);
-                using DifferencingStream child = DifferencingStream.Create(
+                using DifferencingDiskImage child = DifferencingDiskImage.Create(
                     baseDisk,
                     differenceStorage,
-                    new DifferencingStreamOptions(
+                    new DifferencingDiskImageOptions(
                         leaveBaseOpen: true,
                         leaveDifferenceOpen: true),
                     "base.tfdisk");
@@ -48,7 +48,7 @@ public class DiskImageSessionTests
 
             using (DiskImageSession session = DiskImageSession.Open(childPath, readOnly: false))
             {
-                DifferencingStream child = Assert.IsType<DifferencingStream>(session.LogicalStream);
+                DifferencingDiskImage child = Assert.IsType<DifferencingDiskImage>(session.LogicalStream);
                 Assert.Equal(basePath, Path.GetFullPath(child.ParentPathHint!, directory));
                 Assert.Equal([31, 7, 31], ReadAt(child, 99, 3));
                 child.WriteAt([8], BlockSize + 20);
@@ -56,9 +56,9 @@ public class DiskImageSessionTests
             }
 
             using var reopenedStorage = new FileStream(basePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-            using DynamicAllocationStream reopenedBase = DynamicAllocationStream.Open(
+            using SparseDiskImage reopenedBase = SparseDiskImage.Open(
                 reopenedStorage,
-                new DynamicAllocationStreamOptions(
+                new SparseDiskImageOptions(
                     leaveOpen: true,
                     readOnly: true,
                     freeBlockQueueCapacity: 0,
@@ -83,11 +83,11 @@ public class DiskImageSessionTests
         {
             {
                 using var baseStorage = new FileStream(basePath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None);
-                using DynamicAllocationStream baseDisk = DynamicAllocationStream.Create(
+                using SparseDiskImage baseDisk = SparseDiskImage.Create(
                     baseStorage,
                     Capacity,
                     BlockSize,
-                    new DynamicAllocationStreamOptions(
+                    new SparseDiskImageOptions(
                         leaveOpen: true,
                         freeBlockQueueCapacity: 0,
                         freeBlockQueueLowWatermark: 0));
@@ -96,10 +96,10 @@ public class DiskImageSessionTests
                     FileMode.CreateNew,
                     FileAccess.ReadWrite,
                     FileShare.None);
-                using DifferencingStream child = DifferencingStream.Create(
+                using DifferencingDiskImage child = DifferencingDiskImage.Create(
                     baseDisk,
                     differenceStorage,
-                    new DifferencingStreamOptions(
+                    new DifferencingDiskImageOptions(
                         leaveBaseOpen: true,
                         leaveDifferenceOpen: true),
                     "child.tfdiff");

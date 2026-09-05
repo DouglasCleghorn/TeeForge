@@ -10,13 +10,13 @@ Status: accepted for implementation on 2026-08-22; updated on 2026-08-24.
 - Public namespaces are organized by stable feature family:
   `TeeForge.Composition`, `TeeForge.Mirroring`, `TeeForge.Pipelines`,
   `TeeForge.Hashing`, `TeeForge.RandomAccess`, `TeeForge.Networking`,
-  `TeeForge.Sparse`, and `TeeForge.ErasureCoding`.
+  and `TeeForge.ErasureCoding`.
 - The root `TeeForge` namespace contains no public types. Consumers import only
   the feature families they use.
 - License: MIT.
 - Public concrete classes remain unsealed.
 - The sole runtime NuGet dependency is Microsoft's MIT-licensed
-  `System.IO.Hashing`, used for the persisted XXHash checksums.
+  `System.IO.Hashing`, used for checksums and incremental hash destinations.
 - The package contains XML documentation, portable symbols, Source Link data,
   README, changelog, license, and third-party notices.
 
@@ -268,10 +268,9 @@ use such a fallback internally.
 Positional reads retain primary-sized consistency checking, positional writes
 attempt every destination, and a range open owns one bounded child stream per
 destination. Asynchronous fan-out starts all independent destination writes
-before awaiting the phase. `DynamicAllocationStream` translates logical
+
 offsets through its BAT and uses an upstream capability for physical I/O when
-present. Independent physical reads and durability-safe groups of journal or
-metadata writes are submitted together before their barrier. These patterns
+present. Independent upstream operations may be submitted together before awaiting their completion. These patterns
 permit an upstream device to exploit queueing such as NCQ without defining an
 NCQ API or guaranteeing a particular scheduling policy.
 
@@ -297,7 +296,7 @@ The HTTP leaf intentionally does not preload or cache. A future adaptive
 read-ahead/cache layer should consume `ITeeRangeReadSource`, initially reserve a
 large range (the current design target is 4 MiB), expose progressively filled
 prefixes, coalesce overlapping readers, and grow its reservation only after
-sustained consumption. `ErasureCodeStream` likewise translates this logical
+
 capability at its member-I/O boundary when a member implements it.
 
 ## TeeBufferedStream
@@ -611,112 +610,65 @@ detailed in [the multipath stream design](multipath-stream.md).
   results and conclusions remain in the repository under the
   [repository-wide sampling and retention policy](benchmarks/README.md#repository-wide-sampling-and-retention-policy).
 
-## DynamicAllocationStream
 
-`DynamicAllocationStream` exposes a sparse logical address space over a single
-readable, seekable backing stream. Creation additionally requires an empty,
-writable stream and a positive 4 KiB-aligned immutable `VirtualCapacity`.
-`Length` is the block-aligned end of the highest allocated, non-trimmed logical
-block, is capped by that capacity, and may decrease after trim or compaction.
+## ErasureStream
 
-The creation block size is a power of two from 64 KiB through 256 MiB and
-defaults to 1 MiB. A first write allocates and zero-initializes a physical block
-unless it overwrites that whole block. Unallocated gaps and trimmed blocks read
-as zero. `SetLength` is unsupported.
+`ErasureStream` maps one fixed-length byte sequence onto `k` data streams and
+`m` parity streams using systematic Reed-Solomon coding. Members contain only
+encoded payload: no persistent header, journal, identity, or membership record.
 
-The block allocation table consists of raw little-endian 64-bit entries: zero
-means unallocated and nonzero values are absolute, block-aligned physical
-offsets. BAT and trim metadata are allocated in block-sized regions referenced
-by a chained region table. The final physical region-table slot is reserved for
-the chain link.
+## Write and reopen
 
-Payload and BAT data are written in place. Metadata transitions are protected
-by two checksummed, generation-numbered roots and a bounded metadata-only redo
-journal in header block zero. Flush establishes the wrapper's durability
-boundary. A writable open replays an active valid journal to its home offsets;
-a read-only open applies the same patches through an in-memory overlay.
+```csharp
+using TeeForge.ErasureCoding;
 
-Full-block trim immediately removes a block from logical liveness. Partial trim
-zeroes only the requested bytes in place. Fast compaction releases trimmed
-blocks and packs live payload and movable metadata toward the start; slow
-compaction first performs those operations, then additionally identifies and
-releases all-zero payload blocks. `EstimateCompactionSavings` performs only
-allocation arithmetic and never scans payload for zeroes.
+var options = new ErasureStreamOptions(leaveOpen: true);
+await using (ErasureStream encoded = ErasureStream.Create(
+    members, dataShardCount: 4, parityShardCount: 2,
+    logicalLength: source.Length, blockSize: 128 * 1024, options))
+{
+    await source.CopyToAsync(encoded);
+    await encoded.CompleteAsync();
+}
 
-The exact byte layout, checksum coverage, commit protocol, recovery validation,
-allocation strategy, and compatibility policy are normative in
-[the DynamicAllocationStream format specification](dynamic-allocation-stream-format.md).
+await using ErasureStream decoded = ErasureStream.Open(
+    members, 4, 2, source.Length, 128 * 1024, options);
+await decoded.CopyToAsync(destination);
+```
 
-## DifferencingStream
+Keep member order, logical length, block size, and data/parity counts externally.
+For forward-only members, supply fresh readers positioned at payload byte zero.
+Seekable members are addressed from offset zero. `Create` truncates seekable
+writable members; use it only for outputs whose contents may be replaced.
 
-`DifferencingStream` overlays a writable child stream on a readable, seekable
-immediate base. A TeeForge base supplies its stable ID, current data-write ID,
-block size, and virtual capacity directly; the explicit overload accepts the
-same identity and geometry for another base-stream implementation. Create and
-open reject geometry or identity mismatches.
+## Stream behavior
 
-Every member of a chain uses the same immutable 4 KiB-aligned virtual capacity,
-allocation-block size, and 4096-byte logical grain origin. The child BAT uses
-VHDX-numbered inherited (0), erased (2), fully present (6), and partially
-present (7) states. Presence bits select child or parent data independently for
-each 4096-byte grain. A small inherited write materializes only affected grains,
-while the first partial write after erase starts from a fully zeroed child
-block.
+- Capabilities follow the available member capabilities.
+- Ordinary reads/writes use logical `Position`. Positional operations preserve
+  it; writes to the same codeword serialize.
+- One codeword covers `k * BlockSize` logical bytes. Each member receives one
+  `BlockSize` payload, including zero padding in the final codeword.
+- The logical length is fixed; `SetLength` is unsupported.
+- Forward-only writers must supply exactly the declared length and call
+  `CompleteAsync`. This emits the final partial codeword and flushes members.
+  `Flush` does not finalize a partial codeword; disposal does not replace completion.
+- The stream owns members unless `LeaveOpen` is true. `Open` never initializes
+  or truncates member contents.
+- The cache budget controls retained entries. Active operations may temporarily
+  require additional complete codewords, so bound caller concurrency as well.
 
-Trim never reveals the base. A whole block becomes erased; a partial range uses
-4096-byte read-modify-write grains and selects those grains from the child.
-Ordinary reads, writes, trim, flush, and compaction never write upstream. The
-only optional upstream mutation is `NotifyBaseOnCreate`, which registers the
-durable child's stable ID in a writable immediate-base advisory registry.
+`RequireAllMembers` defaults to true. For degraded reads, set it to false and
+supply a `null` at each missing member position. At least `k` readable members
+are required. Missing members make the stream read-only. Reed-Solomon recovers
+known missing members; this layout does not identify silently corrupted members.
 
-Both ordinary and explicit-offset synchronous and asynchronous I/O are
-serialized per stream. `ReadAt`, `WriteAt`, and their asynchronous forms do not
-observe or change `Position`. `DataWriteId` advances durably before the first
-logical mutation of each writable open, while child registration does not
-change logical data identity.
+Partial writes can succeed on some members and fail on others. There is no
+transactional recovery or safe automatic retry guarantee. Flush behavior is
+the behavior supplied by the underlying streams.
 
-Standalone sparse images use `.tfdisk`; difference images use `.tfdiff`. The
-separate Windows broker and its intentionally explicit driver boundary are
-described in [Windows mounting](windows-mounting.md). The precise media contract
-is normative in [the DifferencingStream format specification](differencing-stream-format.md).
+The default block size remains 128 KiB. Existing benchmark observations are
+historical evidence; changing defaults requires equivalent sampled comparisons
+under the [benchmark policy](benchmarks/README.md).
 
-`ReadLocator` and `ReadLocatorAsync` inspect a child identifier before the base
-is resolved. They validate the header checksum, return the recorded parent
-identity and geometry plus its optional path hint, and preserve the supplied
-stream's position.
-
-## ErasureCodeStream
-
-`ErasureCodeStream` is a public fixed-capacity, readable, writable, seekable
-`Stream` and `ITeeRandomAccessStream`. `Create` formats exactly `k + m` empty,
-unique, readable, writable, seekable member streams. `Open` accepts at least `k`
-valid members in any supplied order, discovers their persistent positions, and
-replays any committed non-checkpointed journal transaction before returning.
-Read-only open is supported when no transaction needs replay.
-
-The implementation serializes logical operations while it issues independent
-member I/O concurrently. Positional `ReadAt` and `WriteAt` do not change
-`Position`. Capacity is fixed by the stable configuration, so `SetLength` and
-seeks beyond `[0, Length]` are rejected. A canceled write is abandoned only
-before its commit quorum; after commitment it completes or recovers without
-using the caller cancellation token.
-
-`GetState` returns immutable aggregate and per-member snapshots. The member
-performance snapshot contains exact byte, operation, reconstruction, and error
-counters plus deterministically sampled latency, throughput, maximum latency,
-and histogram buckets. `RegisterStateChangeHandler` and
-`RegisterMaintenanceHandler` queue observer functions and isolate observer
-exceptions from storage operations.
-
-`CheckConsistencyAsync` validates every current header and 64 KiB integrity
-block. `ErasureMaintenanceOptions` selects foreground, yielding balanced, or
-delayed background scheduling and an optional bytes-per-second limit. The check
-reports corrupt, stale, and missing positions but does not yet repair them.
-Member replacement, repair, capacity expansion, and parity reshaping are future
-operations.
-
-See [the ErasureCodeStream overview](erasure-code-stream.md) for the safety
-model and current status. Its proposed version-1 media format, quorum behavior,
-crash recovery, state model, maintenance controls, and verification
-requirements are defined in
-[the ErasureCodeStream format specification](erasure-code-stream-format.md).
+Run the [forward-only sample](../samples/TeeForge.Streaming/README.md) to encode,
+reopen, and recover with two missing members.

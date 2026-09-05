@@ -1,0 +1,28 @@
+namespace TeeForge.Experimental.Storage.ErasureCoding.Internal;
+
+internal readonly record struct ErasureMemberSuperblock(
+    uint FeatureFlags,
+    ulong SuperblockGeneration,
+    Guid SetId,
+    Guid MemberId,
+    Guid ConfigurationId,
+    ulong ConfigurationGeneration,
+    ushort MemberPosition,
+    ushort DataShardCount,
+    ushort ParityShardCount,
+    ushort JournalSlotCount,
+    uint ShardSize,
+    uint IntegrityBlockSize,
+    ulong StripeCount,
+    ulong LogicalCapacity,
+    ulong MetadataOffset,
+    ulong MetadataLength,
+    ulong JournalOffset,
+    ulong JournalLength,
+    ulong DataOffset,
+    uint ShardHeaderSize,
+    uint ShardRecordSize,
+    ulong ConfigurationRecordOffset,
+    uint ConfigurationRecordLength,
+    uint MemberStateFlags,
+    UInt128 ConfigurationRecordHash);

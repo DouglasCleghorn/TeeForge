@@ -2,6 +2,7 @@
 **/obj/
 **/BenchmarkDotNet.Artifacts/
 artifacts/
+.local/
 .vs/
 .idea/
 .vscode/
@@ -9,3 +10,13 @@ artifacts/
 TestResults/
 *.user
 *.suo
+
+# Local credentials, certificates, environment overrides, and memory dumps.
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.pem
+*.key
+*.dmp

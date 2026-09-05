@@ -32,7 +32,7 @@ internal static class ErasureStreamFileExperiment
 
         int[] blockSizes = selectedBlockSize is null ? BlockSizes : [selectedBlockSize.Value];
         string outputDirectory = ReadOption(args, "--output") ??
-            Path.Combine("benchmarks", "TeeForge.Benchmarks", "Experiments");
+            Path.Combine("artifacts", "erasure-diagnostics", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(outputDirectory);
         string temporaryRoot = Path.Combine(Path.GetTempPath(), $"teeforge-erasure-{Guid.NewGuid():N}");
         Directory.CreateDirectory(temporaryRoot);
@@ -41,13 +41,14 @@ internal static class ErasureStreamFileExperiment
         {
             string backingName = useMemory ? "RandomAccessMemoryStream" : "local-file";
             string outputStem = useMemory
-                ? "2026-08-26-erasure-stream-memory-block-size"
-                : "2026-08-26-erasure-stream-block-size";
+                ? "erasure-stream-memory-block-size"
+                : "erasure-stream-block-size";
             if (selectedBlockSize is not null)
             {
                 outputStem += $"-{FormatBytes(selectedBlockSize.Value).ToLowerInvariant()}";
             }
 
+            Console.WriteLine("Single-pass diagnostic. Use eng/run-sampled-benchmark.ps1 for retained evidence.");
             Console.WriteLine($"4+2 {backingName} experiment: {dataMiB} MiB logical, {randomOperations} random 4 KiB operations");
             var results = new List<Result>(blockSizes.Length);
             foreach (int blockSize in blockSizes)
@@ -115,7 +116,7 @@ internal static class ErasureStreamFileExperiment
 
         Measurement sequentialRead = await MeasureAsync(async () =>
         {
-            await using ErasureStream stream = ErasureStream.Open(storage.Open(), options);
+            await using ErasureStream stream = ErasureStream.Open(storage.Open(), DataShardCount, ParityShardCount, logicalLength, blockSize, options);
             long remaining = logicalLength;
             long checksum = 0;
             while (remaining > 0)
@@ -138,7 +139,7 @@ internal static class ErasureStreamFileExperiment
         var request = new byte[RandomRequestSize];
         Measurement randomRead = await MeasureAsync(async () =>
         {
-            await using ErasureStream stream = ErasureStream.Open(storage.Open(), options);
+            await using ErasureStream stream = ErasureStream.Open(storage.Open(), DataShardCount, ParityShardCount, logicalLength, blockSize, options);
             long checksum = 0;
             foreach (long offset in offsets)
             {
@@ -152,7 +153,7 @@ internal static class ErasureStreamFileExperiment
         new Random(0x524d57).NextBytes(request);
         Measurement randomWrite = await MeasureAsync(async () =>
         {
-            await using ErasureStream stream = ErasureStream.Open(storage.Open(), options);
+            await using ErasureStream stream = ErasureStream.Open(storage.Open(), DataShardCount, ParityShardCount, logicalLength, blockSize, options);
             foreach (long offset in offsets)
             {
                 await stream.WriteAtAsync(request, offset).ConfigureAwait(false);
@@ -230,10 +231,10 @@ internal static class ErasureStreamFileExperiment
     private static string CreateCsv(IEnumerable<Result> results)
     {
         var builder = new StringBuilder();
-        builder.AppendLine("BlockSizeBytes,SequentialWriteMiBps,SequentialWriteCpuPercent,SequentialWritePeakWorkingSetIncreaseMiB,SequentialWriteAllocatedMiB,SequentialReadMiBps,SequentialReadCpuPercent,SequentialReadPeakWorkingSetIncreaseMiB,SequentialReadAllocatedMiB,RandomReadIops,RandomReadCpuPercent,RandomReadPeakWorkingSetIncreaseMiB,RandomReadAllocatedMiB,RandomWriteIops,RandomWriteCpuPercent,RandomWritePeakWorkingSetIncreaseMiB,RandomWriteAllocatedMiB");
+        builder.AppendLine("Runtime,BlockSizeBytes,SequentialWriteMiBps,SequentialWriteCpuPercent,SequentialWritePeakWorkingSetIncreaseMiB,SequentialWriteAllocatedMiB,SequentialReadMiBps,SequentialReadCpuPercent,SequentialReadPeakWorkingSetIncreaseMiB,SequentialReadAllocatedMiB,RandomReadIops,RandomReadCpuPercent,RandomReadPeakWorkingSetIncreaseMiB,RandomReadAllocatedMiB,RandomWriteIops,RandomWriteCpuPercent,RandomWritePeakWorkingSetIncreaseMiB,RandomWriteAllocatedMiB");
         foreach (Result result in results)
         {
-            builder.Append(result.BlockSize).Append(',');
+            builder.Append(Environment.Version).Append(',').Append(result.BlockSize).Append(',');
             AppendMeasurement(builder, result.SequentialWrite);
             AppendMeasurement(builder, result.SequentialRead);
             AppendMeasurement(builder, result.RandomRead);

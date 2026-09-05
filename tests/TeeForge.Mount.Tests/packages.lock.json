@@ -172,6 +172,13 @@
       "teeforge-mount": {
         "type": "Project",
         "dependencies": {
+          "TeeForge": "[0.1.0, )",
+          "TeeForge.Experimental.Storage": "[1.0.0, )"
+        }
+      },
+      "teeforge.experimental.storage": {
+        "type": "Project",
+        "dependencies": {
           "TeeForge": "[0.1.0, )"
         }
       },

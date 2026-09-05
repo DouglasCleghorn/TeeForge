@@ -1,5 +1,5 @@
 using System.IO.MemoryMappedFiles;
-using TeeForge.Sparse;
+using TeeForge.Experimental.Storage.Sparse;
 
 namespace TeeForge.Mount.Tests;
 
@@ -12,11 +12,11 @@ public class ImDiskProxyServerTests
     public async Task SharedMemoryProtocolExposes4KGeometryAndTranslatesUnmapAndZeroToTrim()
     {
         using var storage = new MemoryStream();
-        using DynamicAllocationStream disk = DynamicAllocationStream.Create(
+        using SparseDiskImage disk = SparseDiskImage.Create(
             storage,
             4L * BlockSize,
             BlockSize,
-            new DynamicAllocationStreamOptions(
+            new SparseDiskImageOptions(
                 leaveOpen: true,
                 freeBlockQueueCapacity: 0,
                 freeBlockQueueLowWatermark: 0));
@@ -73,11 +73,11 @@ public class ImDiskProxyServerTests
     public async Task ProxyUnmapOnDifferenceMasksBaseWithoutWritingUpstream()
     {
         using var baseStorage = new MemoryStream();
-        using DynamicAllocationStream baseDisk = DynamicAllocationStream.Create(
+        using SparseDiskImage baseDisk = SparseDiskImage.Create(
             baseStorage,
             4L * BlockSize,
             BlockSize,
-            new DynamicAllocationStreamOptions(
+            new SparseDiskImageOptions(
                 leaveOpen: true,
                 freeBlockQueueCapacity: 0,
                 freeBlockQueueLowWatermark: 0));
@@ -85,10 +85,10 @@ public class ImDiskProxyServerTests
         baseDisk.Flush();
         Guid baseDataWriteId = baseDisk.DataWriteId;
         using var differenceStorage = new MemoryStream();
-        using DifferencingStream difference = DifferencingStream.Create(
+        using DifferencingDiskImage difference = DifferencingDiskImage.Create(
             baseDisk,
             differenceStorage,
-            new DifferencingStreamOptions(
+            new DifferencingDiskImageOptions(
                 leaveBaseOpen: true,
                 leaveDifferenceOpen: true));
         using var image = new DiskImageSession(difference, "test.tfdiff");
@@ -146,14 +146,14 @@ public class ImDiskProxyServerTests
         Assert.True(response.WaitOne(TimeSpan.FromSeconds(10)), "The proxy did not respond in time.");
     }
 
-    private static byte[] ReadAt(DynamicAllocationStream stream, long offset, int count)
+    private static byte[] ReadAt(SparseDiskImage stream, long offset, int count)
     {
         byte[] buffer = new byte[count];
         Assert.Equal(count, stream.ReadAt(buffer, offset));
         return buffer;
     }
 
-    private static byte[] ReadAt(DifferencingStream stream, long offset, int count)
+    private static byte[] ReadAt(DifferencingDiskImage stream, long offset, int count)
     {
         byte[] buffer = new byte[count];
         Assert.Equal(count, stream.ReadAt(buffer, offset));

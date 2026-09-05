@@ -7,19 +7,19 @@
     <Title>TeeForge</Title>
     <Version>0.1.0</Version>
     <Authors>Doug Cleghorn</Authors>
-    <Copyright>Copyright © 2026 Doug Cleghorn</Copyright>
-    <Description>High-performance .NET streams for mirrored I/O, write-only replication, buffered fan-out, multi-hashing, broadcast pipelines, sparse storage, HTTP range reads, and mutually authenticated QUIC.</Description>
-    <PackageTags>stream;pipe;pipelines;broadcast;tee;raid;replication;io;hash;cryptography;sparse;virtual-disk;random-access;http-range;quic;mtls</PackageTags>
+    <Copyright>Copyright Â© 2026 Doug Cleghorn</Copyright>
+    <Description>High-performance .NET streams for mirrored I/O, write-only replication, buffered fan-out, multi-hashing, broadcast pipelines, headerless erasure coding, HTTP range reads, and mutually authenticated QUIC.</Description>
+    <PackageTags>stream;pipe;pipelines;broadcast;tee;raid;replication;io;hash;cryptography;erasure-coding;random-access;http-range;quic;mtls</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <PackageIcon>teeforge-icon.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>Initial release with mirrored and buffered streams, multi-hash writes, fixed-reader broadcast pipelines, sparse block storage, explicit-offset random access, and resilient HTTP range reads. See https://github.com/DouglasCleghorn/TeeForge/blob/main/CHANGELOG.md#010---2026-08-23</PackageReleaseNotes>
+    <PackageReleaseNotes>Stream composition, mirrored and buffered I/O, hashing, broadcast pipelines, headerless erasure coding, HTTP ranges, and mutually authenticated QUIC. See CHANGELOG.md.</PackageReleaseNotes>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/DouglasCleghorn/TeeForge</RepositoryUrl>
     <PackageProjectUrl>https://github.com/DouglasCleghorn/TeeForge</PackageProjectUrl>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
-    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <EmbedUntrackedSources>false</EmbedUntrackedSources>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>

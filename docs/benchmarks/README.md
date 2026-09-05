@@ -6,6 +6,24 @@ Raw transient BenchmarkDotNet artifacts do not replace the curated experiment re
 
 ## Repository-wide sampling and retention policy
 
+Use `eng/run-sampled-benchmark.ps1` for CSV-producing custom harnesses. It builds
+Release, runs process-isolated warmups and at least five samples, records Git,
+CPU, runtime, SDK, arguments and individual results, and exports separate raw
+and aggregate CSVs in a unique directory. Failed runs remain recorded and make
+the command fail. The harness must accept `--output`, write exactly one CSV,
+and identify its runtime in a `Runtime` column. `-CaseColumns` identifies the
+non-metric columns. BenchmarkDotNet exports still require conversion to the
+same retained evidence schema; this runner does not parse its report format.
+
+```powershell
+./eng/run-sampled-benchmark.ps1 -BenchmarkArguments @(
+    '--erasure-stream-memory', '--data-mib', '256',
+    '--random-operations', '262144', '--block-size', '4096')
+```
+
+Direct erasure harness invocations are diagnostic and write unique artifact
+directories. They no longer overwrite retained historical experiments.
+
 This policy applies to every benchmark in the repository, including
 BenchmarkDotNet classes, purpose-built experiment harnesses, transport tools,
 driver tests, and benchmarks added outside `TeeForge.Benchmarks`.

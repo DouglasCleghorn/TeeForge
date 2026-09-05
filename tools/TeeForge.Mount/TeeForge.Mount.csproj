@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/TeeForge/TeeForge.csproj" />
+    <ProjectReference Include="../../src/TeeForge.Experimental.Storage/TeeForge.Experimental.Storage.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="TeeForge.Mount.Tests" />

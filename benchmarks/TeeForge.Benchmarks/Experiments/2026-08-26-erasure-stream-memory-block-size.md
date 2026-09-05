@@ -102,7 +102,7 @@ single-run engineering comparison rather than confidence intervals.
 
 The suspicious 192,566 IOPS result was checked with seven fresh-process trials
 of 262,144 random reads each. The optimized implementation produced a median of
-**413,943 IOPS**, a mean of **397,415 IOPS**, and a range of **334,326–444,912
+**413,943 IOPS**, a mean of **397,415 IOPS**, and a range of **334,326â€“444,912
 IOPS**. The original 434,234 IOPS observation is inside that range. There is
 therefore no measured 0.44x regression; the two 4,096-operation observations
 were too short to compare.
@@ -129,8 +129,8 @@ not an equivalent-protocol before/after result under the repository-wide policy.
 Removing the cache scan, old-data reads, and per-codeword task allocations makes
 the former per-operation overhead at 4 KiB and 8 KiB especially visible in the
 before/after ratios. Sequential throughput now reaches a broad plateau at
-16–256 KiB. Random writes
-peak at 16–32 KiB and then decline with read/modify/write amplification.
+16â€“256 KiB. Random writes
+peak at 16â€“32 KiB and then decline with read/modify/write amplification.
 
 The 64 MiB cache also explains the random-read shape. Small requested blocks
 allow most of the deterministic working set to remain resident. Once the

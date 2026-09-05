@@ -1,13 +1,16 @@
 <Solution>
   <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/TeeForge.Experimental.Storage.Benchmarks/TeeForge.Experimental.Storage.Benchmarks.csproj" />
     <Project Path="benchmarks/TeeForge.Benchmarks/TeeForge.Benchmarks.csproj" />
     <Project Path="benchmarks/TeeForge.QuicBench.Client/TeeForge.QuicBench.Client.csproj" />
     <Project Path="benchmarks/TeeForge.QuicBench.Server/TeeForge.QuicBench.Server.csproj" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/TeeForge.Experimental.Storage/TeeForge.Experimental.Storage.csproj" />
     <Project Path="src/TeeForge/TeeForge.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/TeeForge.Experimental.Storage.Tests/TeeForge.Experimental.Storage.Tests.csproj" />
     <Project Path="tests/TeeForge.AotSmoke/TeeForge.AotSmoke.csproj" />
     <Project Path="tests/TeeForge.Mount.Tests/TeeForge.Mount.Tests.csproj" />
     <Project Path="tests/TeeForge.StressTests/TeeForge.StressTests.csproj" />
@@ -15,5 +18,8 @@
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/TeeForge.Mount/TeeForge.Mount.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/TeeForge.Streaming/TeeForge.Streaming.csproj" />
   </Folder>
 </Solution>

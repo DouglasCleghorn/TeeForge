@@ -62,7 +62,7 @@ OneDrive activity were not controlled.
 | Write | 1 MiB | 1,562.4 | 239.7 | 206.1 | 15.3% |
 
 `QUIC/direct` compares the uncompressed QUIC result with the direct result from
-the same run. Loopback QUIC plateaued near 240–285 MiB/s; larger blocks raised
+the same run. Loopback QUIC plateaued near 240â€“285 MiB/s; larger blocks raised
 the cached direct baseline but did not raise QUIC throughput.
 
 ### Random read throughput
@@ -115,7 +115,7 @@ also slows. They are not a QUIC speedup.
   while QUIC includes framing, encryption, kernel networking, scheduling, and a
   second process.
 - Compression did not provide a reliable gain on pseudo-random file data. It
-  reduced sequential throughput by 13–44% and generally reduced 64 KiB and
+  reduced sequential throughput by 13â€“44% and generally reduced 64 KiB and
   1 MiB random throughput. The 4 KiB cases are below the 16 KiB threshold and
   therefore mostly measure run-to-run noise rather than compression.
 - Transparent compression should remain configurable and disabled by default.

@@ -8,6 +8,12 @@
           "System.IO.Hashing": "[10.0.11, )"
         }
       },
+      "teeforge.experimental.storage": {
+        "type": "Project",
+        "dependencies": {
+          "TeeForge": "[0.1.0, )"
+        }
+      },
       "System.IO.Hashing": {
         "type": "CentralTransitive",
         "requested": "[10.0.11, )",

@@ -69,27 +69,6 @@ override TeeForge.RandomAccess.HttpRandomAccessStream.ReadAsync(System.Memory<by
 override TeeForge.RandomAccess.HttpRandomAccessStream.Seek(long offset, System.IO.SeekOrigin origin) -> long
 override TeeForge.RandomAccess.HttpRandomAccessStream.SetLength(long value) -> void
 override TeeForge.RandomAccess.HttpRandomAccessStream.Write(byte[]! buffer, int offset, int count) -> void
-override TeeForge.Sparse.DynamicAllocationStream.CanRead.get -> bool
-override TeeForge.Sparse.DynamicAllocationStream.CanSeek.get -> bool
-override TeeForge.Sparse.DynamicAllocationStream.CanWrite.get -> bool
-override TeeForge.Sparse.DynamicAllocationStream.DisposeAsync() -> System.Threading.Tasks.ValueTask
-override TeeForge.Sparse.DynamicAllocationStream.Flush() -> void
-override TeeForge.Sparse.DynamicAllocationStream.FlushAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
-override TeeForge.Sparse.DynamicAllocationStream.Length.get -> long
-override TeeForge.Sparse.DynamicAllocationStream.Position.get -> long
-override TeeForge.Sparse.DynamicAllocationStream.Position.set -> void
-override TeeForge.Sparse.DynamicAllocationStream.Read(byte[]! buffer, int offset, int count) -> int
-override TeeForge.Sparse.DynamicAllocationStream.Read(System.Span<byte> buffer) -> int
-override TeeForge.Sparse.DynamicAllocationStream.ReadAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<int>!
-override TeeForge.Sparse.DynamicAllocationStream.ReadAsync(System.Memory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
-override TeeForge.Sparse.DynamicAllocationStream.ReadByte() -> int
-override TeeForge.Sparse.DynamicAllocationStream.Seek(long offset, System.IO.SeekOrigin origin) -> long
-override TeeForge.Sparse.DynamicAllocationStream.SetLength(long value) -> void
-override TeeForge.Sparse.DynamicAllocationStream.Write(byte[]! buffer, int offset, int count) -> void
-override TeeForge.Sparse.DynamicAllocationStream.Write(System.ReadOnlySpan<byte> buffer) -> void
-override TeeForge.Sparse.DynamicAllocationStream.WriteAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
-override TeeForge.Sparse.DynamicAllocationStream.WriteAsync(System.ReadOnlyMemory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-override TeeForge.Sparse.DynamicAllocationStream.WriteByte(byte value) -> void
 static TeeForge.Hashing.TeeHashAlgorithmAdapter.ToTeeHashAlgorithm(System.Security.Cryptography.HashAlgorithmName algorithm) -> TeeForge.Hashing.TeeHashAlgorithm
 static TeeForge.Hashing.TeeHashAlgorithmAdapter.TryToHashAlgorithmName(TeeForge.Hashing.TeeHashAlgorithm algorithm, out System.Security.Cryptography.HashAlgorithmName result) -> bool
 static TeeForge.Hashing.TeeHashAlgorithmAdapter.TryToTeeHashAlgorithm(System.Security.Cryptography.HashAlgorithmName algorithm, out TeeForge.Hashing.TeeHashAlgorithm result) -> bool
@@ -101,9 +80,6 @@ static TeeForge.Pipelines.TeePipeOptions.Default.get -> TeeForge.Pipelines.TeePi
 static TeeForge.RandomAccess.HttpRandomAccessStream.OpenAsync(System.Net.Http.HttpClient! client, System.Uri! requestUri, TeeForge.RandomAccess.HttpRandomAccessStreamOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TeeForge.RandomAccess.HttpRandomAccessStream!>!
 static TeeForge.RandomAccess.HttpRandomAccessStreamOptions.Default.get -> TeeForge.RandomAccess.HttpRandomAccessStreamOptions!
 static TeeForge.RandomAccess.TeeRandomAccess.TryGet(System.IO.Stream! stream, out TeeForge.RandomAccess.ITeeRandomAccessStream? randomAccess) -> bool
-static TeeForge.Sparse.DynamicAllocationStream.Open(System.IO.Stream! underlying, TeeForge.Sparse.DynamicAllocationStreamOptions? options = null) -> TeeForge.Sparse.DynamicAllocationStream!
-static TeeForge.Sparse.DynamicAllocationStream.OpenAsync(System.IO.Stream! underlying, TeeForge.Sparse.DynamicAllocationStreamOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TeeForge.Sparse.DynamicAllocationStream!>
-static TeeForge.Sparse.DynamicAllocationStreamOptions.Default.get -> TeeForge.Sparse.DynamicAllocationStreamOptions!
 TeeForge.Hashing.TeeHashAlgorithm
 TeeForge.Hashing.TeeHashAlgorithm.Crc32 = 9 -> TeeForge.Hashing.TeeHashAlgorithm
 TeeForge.Hashing.TeeHashAlgorithm.Crc64 = 10 -> TeeForge.Hashing.TeeHashAlgorithm
@@ -266,36 +242,5 @@ TeeForge.RandomAccess.ITeeRandomAccessStream.WriteAtAsync(System.ReadOnlyMemory<
 TeeForge.RandomAccess.ITeeRangeReadSource
 TeeForge.RandomAccess.ITeeRangeReadSource.OpenReadRangeAsync(long offset, long length, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.IO.Stream!>
 TeeForge.RandomAccess.TeeRandomAccess
-TeeForge.Sparse.DynamicAllocationCompactionMode
-TeeForge.Sparse.DynamicAllocationCompactionMode.Fast = 0 -> TeeForge.Sparse.DynamicAllocationCompactionMode
-TeeForge.Sparse.DynamicAllocationCompactionMode.Slow = 1 -> TeeForge.Sparse.DynamicAllocationCompactionMode
-TeeForge.Sparse.DynamicAllocationStream
-TeeForge.Sparse.DynamicAllocationStream.BlockSize.get -> int
-TeeForge.Sparse.DynamicAllocationStream.CanReadAt.get -> bool
-TeeForge.Sparse.DynamicAllocationStream.CanWriteAt.get -> bool
-TeeForge.Sparse.DynamicAllocationStream.Compact(TeeForge.Sparse.DynamicAllocationCompactionMode mode = TeeForge.Sparse.DynamicAllocationCompactionMode.Fast) -> long
-TeeForge.Sparse.DynamicAllocationStream.CompactAsync(TeeForge.Sparse.DynamicAllocationCompactionMode mode = TeeForge.Sparse.DynamicAllocationCompactionMode.Fast, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<long>
-TeeForge.Sparse.DynamicAllocationStream.EstimateCompactionSavings() -> long
-TeeForge.Sparse.DynamicAllocationStream.EstimateCompactionSavingsAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<long>
-TeeForge.Sparse.DynamicAllocationStream.Id.get -> System.Guid
-TeeForge.Sparse.DynamicAllocationStream.IsReadOnly.get -> bool
-TeeForge.Sparse.DynamicAllocationStream.OpenReadRangeAsync(long offset, long length, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.IO.Stream!>
-TeeForge.Sparse.DynamicAllocationStream.ReadAt(System.Span<byte> buffer, long offset) -> int
-TeeForge.Sparse.DynamicAllocationStream.ReadAtAsync(System.Memory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
-TeeForge.Sparse.DynamicAllocationStream.Trim(long offset, long length) -> void
-TeeForge.Sparse.DynamicAllocationStream.TrimAsync(long offset, long length, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-TeeForge.Sparse.DynamicAllocationStream.UnderlyingStream.get -> System.IO.Stream!
-TeeForge.Sparse.DynamicAllocationStream.WriteAt(System.ReadOnlySpan<byte> buffer, long offset) -> void
-TeeForge.Sparse.DynamicAllocationStream.WriteAtAsync(System.ReadOnlyMemory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-TeeForge.Sparse.DynamicAllocationStreamCorruptionException
-TeeForge.Sparse.DynamicAllocationStreamCorruptionException.DynamicAllocationStreamCorruptionException(string! message, long? physicalOffset = null) -> void
-TeeForge.Sparse.DynamicAllocationStreamCorruptionException.DynamicAllocationStreamCorruptionException(string! message, long? physicalOffset, System.Exception! innerException) -> void
-TeeForge.Sparse.DynamicAllocationStreamCorruptionException.PhysicalOffset.get -> long?
-TeeForge.Sparse.DynamicAllocationStreamOptions
-TeeForge.Sparse.DynamicAllocationStreamOptions.DynamicAllocationStreamOptions(bool leaveOpen = false, bool readOnly = false, int freeBlockQueueCapacity = 4096, int freeBlockQueueLowWatermark = 1024) -> void
-TeeForge.Sparse.DynamicAllocationStreamOptions.FreeBlockQueueCapacity.get -> int
-TeeForge.Sparse.DynamicAllocationStreamOptions.FreeBlockQueueLowWatermark.get -> int
-TeeForge.Sparse.DynamicAllocationStreamOptions.LeaveOpen.get -> bool
-TeeForge.Sparse.DynamicAllocationStreamOptions.ReadOnly.get -> bool
 ~override TeeForge.Mirroring.TeeStreamMismatch.Equals(object obj) -> bool
 ~override TeeForge.Mirroring.TeeStreamMismatch.ToString() -> string

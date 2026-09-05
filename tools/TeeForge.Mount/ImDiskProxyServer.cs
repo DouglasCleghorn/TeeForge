@@ -1,6 +1,6 @@
 using System.IO.MemoryMappedFiles;
 using TeeForge.RandomAccess;
-using TeeForge.Sparse;
+using TeeForge.Experimental.Storage.Sparse;
 
 namespace TeeForge.Mount;
 
@@ -209,10 +209,10 @@ internal sealed class ImDiskProxyServer : IDisposable
             long boundedLength = Math.Min(length, logicalLength - offset);
             switch (_image.LogicalStream)
             {
-                case DynamicAllocationStream dynamicStream:
+                case SparseDiskImage dynamicStream:
                     await dynamicStream.TrimAsync(offset, boundedLength, cancellationToken).ConfigureAwait(false);
                     break;
-                case DifferencingStream differencingStream:
+                case DifferencingDiskImage differencingStream:
                     await differencingStream.TrimAsync(offset, boundedLength, cancellationToken).ConfigureAwait(false);
                     break;
                 default:

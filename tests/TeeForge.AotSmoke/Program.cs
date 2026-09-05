@@ -2,10 +2,10 @@ using System.Buffers;
 using System.IO.Hashing;
 using System.IO.Pipelines;
 using System.Security.Cryptography;
+using TeeForge.ErasureCoding;
 using TeeForge.Hashing;
 using TeeForge.Mirroring;
 using TeeForge.Pipelines;
-using TeeForge.Sparse;
 
 byte[] payload = [1, 2, 3, 4];
 
@@ -62,62 +62,26 @@ foreach (PipeReader reader in pipe.Readers)
     reader.Complete();
 }
 
-var dynamicOptions = new DynamicAllocationStreamOptions(
-    leaveOpen: true,
-    freeBlockQueueCapacity: 0,
-    freeBlockQueueLowWatermark: 0);
-await using var dynamicBacking = new MemoryStream();
-await using (DynamicAllocationStream created = await DynamicAllocationStream.CreateAsync(
-    dynamicBacking,
-    16L * 64 * 1024,
-    64 * 1024,
-    dynamicOptions))
+MemoryStream[] members = Enumerable.Range(0, 6).Select(_ => new MemoryStream()).ToArray();
+try
 {
-    created.Position = (2L * 64 * 1024) + 7;
-    await created.WriteAsync(payload);
-    await created.FlushAsync();
+    var options = new ErasureStreamOptions(leaveOpen: true, readAheadBlockCount: 0);
+    await using (ErasureStream encoded = ErasureStream.Create(members, 4, 2, payload.Length, 4096, options))
+    {
+        await encoded.WriteAsync(payload);
+        await encoded.CompleteAsync();
+    }
+
+    Stream?[] surviving = [null, members[1], members[2], members[3], null, members[5]];
+    await using ErasureStream decoded = ErasureStream.Open(surviving, 4, 2, payload.Length, 4096,
+        new ErasureStreamOptions(requireAllMembers: false, leaveOpen: true, readAheadBlockCount: 0));
+    byte[] actual = new byte[payload.Length];
+    await decoded.ReadExactlyAsync(actual);
+    if (!actual.AsSpan().SequenceEqual(payload)) return 5;
 }
-
-dynamicBacking.Position = 0;
-await using (DynamicAllocationStream opened = await DynamicAllocationStream.OpenAsync(dynamicBacking, dynamicOptions))
+finally
 {
-    if (opened.Length != 3L * 64 * 1024)
-    {
-        return 5;
-    }
-
-    opened.Position = (2L * 64 * 1024) + 7;
-    byte[] dynamicResult = new byte[payload.Length];
-    await opened.ReadExactlyAsync(dynamicResult);
-    if (!dynamicResult.AsSpan().SequenceEqual(payload))
-    {
-        return 6;
-    }
-
-    var differenceOptions = new DifferencingStreamOptions(
-        leaveBaseOpen: true,
-        leaveDifferenceOpen: true);
-    await using var differenceBacking = new MemoryStream();
-    await using (DifferencingStream child = await DifferencingStream.CreateAsync(
-        opened,
-        differenceBacking,
-        differenceOptions,
-        "base.tfdisk"))
-    {
-        await child.WriteAtAsync(new byte[] { 9, 8 }, 4095);
-        byte[] differenceResult = new byte[2];
-        if (await child.ReadAtAsync(differenceResult, 4095) != 2 ||
-            !differenceResult.AsSpan().SequenceEqual(new byte[] { 9, 8 }))
-        {
-            return 7;
-        }
-
-        DifferencingStreamLocator locator = await DifferencingStream.ReadLocatorAsync(differenceBacking);
-        if (locator.BaseId != opened.Id || locator.ParentPathHint != "base.tfdisk")
-        {
-            return 8;
-        }
-    }
+    foreach (MemoryStream member in members) await member.DisposeAsync();
 }
 
 return 0;

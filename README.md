@@ -1,21 +1,17 @@
 # TeeForge
 
-![TeeForge icon](assets/teeforge-icon.png)
+![TeeForge icon](https://raw.githubusercontent.com/DouglasCleghorn/TeeForge/main/assets/teeforge-icon.png)
 
 High-performance .NET 10 streams for live composition, mirrored I/O,
 write-only replication, buffered fan-out, multi-hashing, broadcast pipelines,
-sparse storage, HTTP range reads, and mutually authenticated QUIC.
+headerless erasure coding, HTTP range reads, and mutually authenticated QUIC.
 
 TeeForge gives ordinary `Stream` and `System.IO.Pipelines` code explicit tools
 for sending one byte sequence to multiple destinations, checking that mirrored
 sources agree, and addressing large local or remote data without coordinating
 through a shared `Position`.
 
-> TeeForge 0.1 is an early release. The public APIs are tested and package
-> validation is enabled, but applications should evaluate the library and keep
-> independent backups of important data. `ErasureCodeStream` is a new
-> prerelease API with a version-1 format; validate it against your failure model
-> before entrusting it with unique data.
+> TeeForge 0.1 is an early release. The public API may change in subsequent 0.x releases.
 
 ## Install
 
@@ -41,9 +37,8 @@ With NuGet Central Package Management:
 | `TeeForge.Mirroring.ReplicaStream` | Replicating a forward-only write sequence to multiple writable destinations |
 | `TeeForge.Mirroring.TeeBufferedStream` | Coalescing logical I/O once before mirrored fan-out |
 | `TeeForge.Hashing.TeeHashStream` | Writing to destinations while calculating one or more cryptographic hashes or fast checksums |
+| `TeeForge.ErasureCoding.ErasureStream` | Encoding and decoding a fixed-length sequence across headerless data/parity streams |
 | `TeeForge.Pipelines.TeePipe` | Broadcasting one writer's complete byte sequence to a fixed set of independent readers |
-| `TeeForge.Sparse.DynamicAllocationStream` | Storing a very large sparse logical stream in an on-demand block layout |
-| `TeeForge.Sparse.DifferencingStream` | Overlaying grain-level writes and trim on an immutable sparse-disk parent chain |
 | `TeeForge.RandomAccess.ITeeRandomAccessStream` | Reading or writing at explicit offsets without changing `Position` |
 | `TeeForge.RandomAccess.ITeeRangeReadSource` | Opening independent, bounded streams over logical ranges |
 | `TeeForge.RandomAccess.RandomAccessMemoryStream` | Thread-safe positional I/O over an in-memory byte sequence |
@@ -157,7 +152,7 @@ operations run in replica order by default, or concurrently when selected in
 `ReplicaStreamOptions`. One failure is rethrown directly; multiple failures use
 an index-ordered `AggregateException`. A failed operation is not transactional
 and can leave replicas with different prefixes. See
-[the ReplicaStream guide](docs/replica-stream.md) for the complete contract.
+[the ReplicaStream guide](https://github.com/DouglasCleghorn/TeeForge/blob/main/docs/replica-stream.md) for the complete contract.
 
 ## Quick start: mirror a stream
 
@@ -269,72 +264,12 @@ The slowest active reader controls writer backpressure. A completed reader
 leaves the active set, and `FlushResult.IsCompleted` becomes true only after
 the final reader completes.
 
-## Store sparse logical data
-
-`DynamicAllocationStream` is a sparse, block-addressed virtual stream over one
-seekable backing stream. Logical blocks are allocated on first write,
-unwritten gaps read as zero, full-block trim is metadata-only, and compaction
-can pack live blocks toward the beginning of the backing stream.
-
-```csharp
-using TeeForge.Sparse;
-
-await using var backing = new FileStream(
-    "disk.tfdisk",
-    FileMode.CreateNew,
-    FileAccess.ReadWrite,
-    FileShare.None);
-await using var sparse = DynamicAllocationStream.Create(backing, virtualCapacity: 1L << 40);
-
-sparse.Position = 4L * 1024 * 1024 * 1024;
-await sparse.WriteAsync([1, 2, 3, 4]);
-await sparse.FlushAsync();
-```
-
-The default block size is 1 MiB and can be selected at creation. Two
-generation-numbered roots, XXH64 checksums, and a metadata redo journal make
-interrupted metadata commits recoverable. Payload and allocation-table blocks
-are updated in place, so callers choose their own crash-durability flush
-boundaries. Read-only open can recover through an in-memory journal overlay.
-
-See the
-[version-1 media format](https://github.com/DouglasCleghorn/TeeForge/blob/main/docs/dynamic-allocation-stream-format.md)
-for the exact persistence contract.
-
-`DifferencingStream` stores only changes from an immediate base. Its VHDX-style
-BAT states distinguish inherited, erased, fully present, and partially present
-blocks; 4 KiB presence grains make small writes and partial trim independent of
-the allocation-block size. The child captures the base ID and data-write ID and
-rejects a changed parent on open. Ordinary child I/O never writes upstream.
-
-```csharp
-await using var baseFile = File.Open("base.tfdisk", FileMode.Open, FileAccess.Read);
-await using var baseDisk = DynamicAllocationStream.Open(baseFile,
-    new DynamicAllocationStreamOptions(readOnly: true));
-await using var childFile = File.Open("snapshot.tfdiff", FileMode.CreateNew, FileAccess.ReadWrite);
-await using var child = DifferencingStream.Create(
-    baseDisk,
-    childFile,
-    new DifferencingStreamOptions(leaveBaseOpen: true),
-    parentPathHint: "base.tfdisk");
-
-await child.WriteAtAsync([1, 2, 3], offset: 4094);
-await child.TrimAsync(offset: 4094, length: 2);
-```
-
-Use `.tfdisk` for standalone sparse disks and `.tfdiff` for child images. The
-separate Windows broker under `tools/TeeForge.Mount` can expose either extension
-through an explicitly installed ImDisk driver as a non-shipping prototype; see
-[Windows mounting](docs/windows-mounting.md). The deferred native Windows 11
-direction is recorded in the
-[Storport driver design note](docs/windows-storport-driver.md).
-
 ## Read at offsets and over HTTP ranges
 
 `ITeeRandomAccessStream` adds explicit-offset reads and writes without changing
 a stream's `Position`. `ITeeRangeReadSource` opens an independent, bounded,
 forward-only stream over a larger logical range. `TeeStream`,
-`TeeBufferedStream`, `DynamicAllocationStream`, and `DifferencingStream` expose these capabilities
+`TeeBufferedStream`, `ErasureStream`, and `RandomAccessMemoryStream` expose these capabilities
 when their destinations or backing stream can support them.
 
 `RandomAccessMemoryStream` is the in-memory implementation. It has the same
@@ -386,6 +321,18 @@ Every endpoint loads its X.509 certificate and matching unencrypted private key
 from local PEM files and pins the peer certificate from another local file. The
 TLS 1.3 handshake proves possession of the private key matching that certificate;
 a missing, expired, or different peer certificate rejects the connection.
+
+QUIC requires platform support from .NET and its native MsQuic dependency.
+Check `System.Net.Quic.QuicConnection.IsSupported` and
+`System.Net.Quic.QuicListener.IsSupported` before using these APIs. Windows 11
+and Windows Server 2022 or later include the required support through .NET;
+Linux requires `libmsquic`. macOS support has additional setup and limitations.
+Follow the [.NET QUIC platform prerequisites](https://learn.microsoft.com/en-us/dotnet/fundamentals/networking/quic/quic-overview#platform-dependencies).
+
+Trust is based on the exact pinned certificate and its validity dates; it does
+not use public certificate-authority trust, hostname validation, or online
+revocation checks. Distribute and rotate pins through a trusted channel and
+protect the unencrypted private-key files with operating-system permissions.
 
 ```csharp
 using System.Net;
@@ -451,55 +398,25 @@ payloads below the configured threshold remain uncompressed; qualifying
 payloads use the negotiated algorithm. Operations are bounded by
 `MaximumRandomAccessRequestSize`.
 
-## Erasure-coded storage
+## Encode one stream across several members
 
-`ErasureCodeStream` presents `k + m` readable, seekable member streams as one
-fixed-capacity logical stream with `k` systematic data shards and `m`
-Reed-Solomon parity shards. Healthy reads use the data member directly;
-degraded reads reconstruct from any `k` valid current shards. Writes use a
-bounded flushed redo journal to avoid the RAID write hole and can continue while
-the conservative write quorum remains.
+`ErasureStream` splits one logical byte sequence into data and parity streams.
+Members can be forward-only; seeking and positional I/O are available when the
+members support them. It writes no persistent headers or journal.
 
 ```csharp
 using TeeForge.ErasureCoding;
 
-Stream[] drives = OpenDriveStreams();
-await using ErasureCodeStream volume = await ErasureCodeStream.CreateAsync(
-    drives,
-    dataShardCount: 6,
-    parityShardCount: 2,
-    logicalCapacity: 6L * 1024 * 1024 * 1024);
-
-using IDisposable health = volume.RegisterStateChangeHandler(change =>
-    Console.WriteLine(change.Current.Status));
-
-await volume.WriteAtAsync(payload, logicalOffset);
-ErasureCodeStreamState snapshot = volume.GetState();
-ErasureMemberState slowest = snapshot.Members
-    .OrderByDescending(member => member.Performance.ReadLatencyMilliseconds)
-    .First();
-
-ErasureConsistencyCheckResult check = await volume.CheckConsistencyAsync(
-    new ErasureMaintenanceOptions(
-        ErasureMaintenancePriority.Background,
-        maximumBytesPerSecond: 50 * 1024 * 1024));
+await using ErasureStream encoded = ErasureStream.Create(
+    memberStreams, dataShardCount: 4, parityShardCount: 2,
+    logicalLength: source.Length);
+await source.CopyToAsync(encoded);
+await encoded.CompleteAsync();
 ```
 
-Member identity and position are stored on media, so an existing set can be
-opened with surviving members in any order. State snapshots include member
-condition, exact byte/operation/error counters, sampled latency and throughput,
-and latency buckets. Registered functions receive isolated state transitions
-and maintenance progress. Version 1 implements consistency checking; member
-replacement, healing, capacity expansion, and parity reshaping remain future
-maintenance operations, although the configuration records reserve space and
-generation semantics for them.
-
-Read the
-[ErasureCodeStream design](https://github.com/DouglasCleghorn/TeeForge/blob/main/docs/erasure-code-stream.md)
-and
-[version-1 media format](https://github.com/DouglasCleghorn/TeeForge/blob/main/docs/erasure-code-stream-format.md)
-for the journaled implementation, or the lighter, journal-free
-[ErasureStream design](https://github.com/DouglasCleghorn/TeeForge/blob/main/docs/erasure-stream.md).
+Keep the logical length, block size, and member order to reopen the sequence.
+See [the stream guide](https://github.com/DouglasCleghorn/TeeForge/blob/main/docs/erasure-stream.md) and the runnable
+[forward-only example](https://github.com/DouglasCleghorn/TeeForge/blob/main/samples/TeeForge.Streaming/README.md).
 
 ## Documentation
 
@@ -520,14 +437,11 @@ when reporting a defect.
 ## Build from source
 
 ```text
-dotnet restore TeeForge.slnx --locked-mode
-dotnet build TeeForge.slnx -c Release --no-restore
+dotnet restore TeeForge.Core.slnx --locked-mode
+dotnet build TeeForge.Core.slnx -c Release --no-restore
 dotnet test --project tests/TeeForge.Tests/TeeForge.Tests.csproj -c Release --no-build --no-restore --minimum-expected-tests 1
 dotnet pack src/TeeForge/TeeForge.csproj -c Release --no-build --no-restore
 ```
-
-Maintainers can follow the
-[release checklist](https://github.com/DouglasCleghorn/TeeForge/blob/main/docs/releasing.md).
 
 ## License and provenance
 

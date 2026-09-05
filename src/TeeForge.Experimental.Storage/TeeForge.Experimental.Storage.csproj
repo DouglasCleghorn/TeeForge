@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <Description>Experimental storage formats and recovery research. Not ready for production use.</Description>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../TeeForge/TeeForge.csproj" />
+    <InternalsVisibleTo Include="TeeForge.Experimental.Storage.Tests" />
+  </ItemGroup>
+</Project>

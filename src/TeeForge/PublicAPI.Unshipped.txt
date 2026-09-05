@@ -1,4 +1,24 @@
 #nullable enable
+const TeeForge.ErasureCoding.ErasureStreamOptions.DefaultBlockSize = 131072 -> int
+override TeeForge.ErasureCoding.ErasureStream.CanRead.get -> bool
+override TeeForge.ErasureCoding.ErasureStream.CanSeek.get -> bool
+override TeeForge.ErasureCoding.ErasureStream.CanWrite.get -> bool
+override TeeForge.ErasureCoding.ErasureStream.DisposeAsync() -> System.Threading.Tasks.ValueTask
+override TeeForge.ErasureCoding.ErasureStream.Flush() -> void
+override TeeForge.ErasureCoding.ErasureStream.FlushAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+override TeeForge.ErasureCoding.ErasureStream.Length.get -> long
+override TeeForge.ErasureCoding.ErasureStream.Position.get -> long
+override TeeForge.ErasureCoding.ErasureStream.Position.set -> void
+override TeeForge.ErasureCoding.ErasureStream.Read(byte[]! buffer, int offset, int count) -> int
+override TeeForge.ErasureCoding.ErasureStream.Read(System.Span<byte> buffer) -> int
+override TeeForge.ErasureCoding.ErasureStream.ReadAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<int>!
+override TeeForge.ErasureCoding.ErasureStream.ReadAsync(System.Memory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
+override TeeForge.ErasureCoding.ErasureStream.Seek(long offset, System.IO.SeekOrigin origin) -> long
+override TeeForge.ErasureCoding.ErasureStream.SetLength(long value) -> void
+override TeeForge.ErasureCoding.ErasureStream.Write(byte[]! buffer, int offset, int count) -> void
+override TeeForge.ErasureCoding.ErasureStream.Write(System.ReadOnlySpan<byte> buffer) -> void
+override TeeForge.ErasureCoding.ErasureStream.WriteAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+override TeeForge.ErasureCoding.ErasureStream.WriteAsync(System.ReadOnlyMemory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 override TeeForge.Mirroring.ReplicaStream.CanRead.get -> bool
 override TeeForge.Mirroring.ReplicaStream.CanSeek.get -> bool
 override TeeForge.Mirroring.ReplicaStream.CanTimeout.get -> bool
@@ -23,7 +43,29 @@ override TeeForge.Mirroring.ReplicaStream.WriteAsync(System.ReadOnlyMemory<byte>
 override TeeForge.Mirroring.ReplicaStream.WriteByte(byte value) -> void
 override TeeForge.Mirroring.ReplicaStream.WriteTimeout.get -> int
 override TeeForge.Mirroring.ReplicaStream.WriteTimeout.set -> void
+static TeeForge.ErasureCoding.ErasureStream.Create(System.Collections.Generic.IReadOnlyList<System.IO.Stream!>! members, int dataShardCount, int parityShardCount, long logicalLength, int blockSize = 131072, TeeForge.ErasureCoding.ErasureStreamOptions? options = null) -> TeeForge.ErasureCoding.ErasureStream!
+static TeeForge.ErasureCoding.ErasureStream.Open(System.Collections.Generic.IReadOnlyList<System.IO.Stream?>! members, int dataShardCount, int parityShardCount, long logicalLength, int blockSize = 131072, TeeForge.ErasureCoding.ErasureStreamOptions? options = null) -> TeeForge.ErasureCoding.ErasureStream!
+static TeeForge.ErasureCoding.ErasureStreamOptions.Default.get -> TeeForge.ErasureCoding.ErasureStreamOptions!
 static TeeForge.Mirroring.ReplicaStreamOptions.Default.get -> TeeForge.Mirroring.ReplicaStreamOptions!
+TeeForge.ErasureCoding.ErasureStream
+TeeForge.ErasureCoding.ErasureStream.BlockSize.get -> int
+TeeForge.ErasureCoding.ErasureStream.CanReadAt.get -> bool
+TeeForge.ErasureCoding.ErasureStream.CanWriteAt.get -> bool
+TeeForge.ErasureCoding.ErasureStream.CompleteAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+TeeForge.ErasureCoding.ErasureStream.DataShardCount.get -> int
+TeeForge.ErasureCoding.ErasureStream.LogicalLength.get -> long
+TeeForge.ErasureCoding.ErasureStream.MissingMemberPositions.get -> System.Collections.Generic.IReadOnlyList<int>!
+TeeForge.ErasureCoding.ErasureStream.ParityShardCount.get -> int
+TeeForge.ErasureCoding.ErasureStream.ReadAt(System.Span<byte> buffer, long offset) -> int
+TeeForge.ErasureCoding.ErasureStream.ReadAtAsync(System.Memory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
+TeeForge.ErasureCoding.ErasureStream.WriteAt(System.ReadOnlySpan<byte> buffer, long offset) -> void
+TeeForge.ErasureCoding.ErasureStream.WriteAtAsync(System.ReadOnlyMemory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+TeeForge.ErasureCoding.ErasureStreamOptions
+TeeForge.ErasureCoding.ErasureStreamOptions.ErasureStreamOptions(bool requireAllMembers = true, bool leaveOpen = false, long maximumCacheBytes = 67108864, int readAheadBlockCount = 1) -> void
+TeeForge.ErasureCoding.ErasureStreamOptions.LeaveOpen.get -> bool
+TeeForge.ErasureCoding.ErasureStreamOptions.MaximumCacheBytes.get -> long
+TeeForge.ErasureCoding.ErasureStreamOptions.ReadAheadBlockCount.get -> int
+TeeForge.ErasureCoding.ErasureStreamOptions.RequireAllMembers.get -> bool
 TeeForge.Mirroring.ReplicaStream
 TeeForge.Mirroring.ReplicaStream.ReplicaStream(params System.IO.Stream![]! replicas) -> void
 TeeForge.Mirroring.ReplicaStream.ReplicaStream(System.Collections.Generic.IEnumerable<System.IO.Stream!>! replicas, TeeForge.Mirroring.ReplicaStreamOptions? options = null) -> void
@@ -32,27 +74,7 @@ TeeForge.Mirroring.ReplicaStreamOptions
 TeeForge.Mirroring.ReplicaStreamOptions.LeaveOpen.get -> bool
 TeeForge.Mirroring.ReplicaStreamOptions.ReplicaStreamOptions(TeeForge.Mirroring.TeeStreamSynchronousMode synchronousMode = TeeForge.Mirroring.TeeStreamSynchronousMode.Sequential, bool leaveOpen = false) -> void
 TeeForge.Mirroring.ReplicaStreamOptions.SynchronousMode.get -> TeeForge.Mirroring.TeeStreamSynchronousMode
-const TeeForge.ErasureCoding.ErasureStreamOptions.DefaultBlockSize = 131072 -> int
 const TeeForge.Networking.MultipathStreamOptions.DefaultFramePayloadSize = 16384 -> int
-override TeeForge.ErasureCoding.ErasureStream.CanRead.get -> bool
-override TeeForge.ErasureCoding.ErasureStream.CanSeek.get -> bool
-override TeeForge.ErasureCoding.ErasureStream.CanWrite.get -> bool
-override TeeForge.ErasureCoding.ErasureStream.DisposeAsync() -> System.Threading.Tasks.ValueTask
-override TeeForge.ErasureCoding.ErasureStream.Flush() -> void
-override TeeForge.ErasureCoding.ErasureStream.FlushAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
-override TeeForge.ErasureCoding.ErasureStream.Length.get -> long
-override TeeForge.ErasureCoding.ErasureStream.Position.get -> long
-override TeeForge.ErasureCoding.ErasureStream.Position.set -> void
-override TeeForge.ErasureCoding.ErasureStream.Read(byte[]! buffer, int offset, int count) -> int
-override TeeForge.ErasureCoding.ErasureStream.Read(System.Span<byte> buffer) -> int
-override TeeForge.ErasureCoding.ErasureStream.ReadAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<int>!
-override TeeForge.ErasureCoding.ErasureStream.ReadAsync(System.Memory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
-override TeeForge.ErasureCoding.ErasureStream.Seek(long offset, System.IO.SeekOrigin origin) -> long
-override TeeForge.ErasureCoding.ErasureStream.SetLength(long value) -> void
-override TeeForge.ErasureCoding.ErasureStream.Write(byte[]! buffer, int offset, int count) -> void
-override TeeForge.ErasureCoding.ErasureStream.Write(System.ReadOnlySpan<byte> buffer) -> void
-override TeeForge.ErasureCoding.ErasureStream.WriteAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
-override TeeForge.ErasureCoding.ErasureStream.WriteAsync(System.ReadOnlyMemory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 override TeeForge.Networking.MultipathReceiverStream.CanRead.get -> bool
 override TeeForge.Networking.MultipathReceiverStream.CanSeek.get -> bool
 override TeeForge.Networking.MultipathReceiverStream.CanWrite.get -> bool
@@ -87,69 +109,9 @@ override TeeForge.Networking.MultipathSenderStream.Write(byte[]! buffer, int off
 override TeeForge.Networking.MultipathSenderStream.Write(System.ReadOnlySpan<byte> buffer) -> void
 override TeeForge.Networking.MultipathSenderStream.WriteAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
 override TeeForge.Networking.MultipathSenderStream.WriteAsync(System.ReadOnlyMemory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-static TeeForge.ErasureCoding.ErasureStream.Create(System.Collections.Generic.IReadOnlyList<System.IO.Stream!>! members, int dataShardCount, int parityShardCount, long logicalLength, int blockSize = 131072, TeeForge.ErasureCoding.ErasureStreamOptions? options = null) -> TeeForge.ErasureCoding.ErasureStream!
-static TeeForge.ErasureCoding.ErasureStream.Open(System.Collections.Generic.IEnumerable<System.IO.Stream!>! members, TeeForge.ErasureCoding.ErasureStreamOptions? options = null) -> TeeForge.ErasureCoding.ErasureStream!
-static TeeForge.ErasureCoding.ErasureStream.OpenRaw(System.Collections.Generic.IReadOnlyList<System.IO.Stream?>! members, int dataShardCount, int parityShardCount, long logicalLength, int blockSize = 131072, TeeForge.ErasureCoding.ErasureStreamOptions? options = null) -> TeeForge.ErasureCoding.ErasureStream!
-static TeeForge.ErasureCoding.ErasureStreamHeaderParser.Parse(System.ReadOnlySpan<byte> superblock) -> TeeForge.ErasureCoding.ErasureStreamHeader!
-static TeeForge.ErasureCoding.ErasureStreamHeaderParser.Read(System.IO.Stream! member) -> TeeForge.ErasureCoding.ErasureStreamHeader!
-static TeeForge.ErasureCoding.ErasureStreamHeaderParser.ReadAsync(System.IO.Stream! member, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TeeForge.ErasureCoding.ErasureStreamHeader!>
-static TeeForge.ErasureCoding.ErasureStreamHeaderParser.TryParse(System.ReadOnlySpan<byte> superblock, out TeeForge.ErasureCoding.ErasureStreamHeader? header) -> bool
-static TeeForge.ErasureCoding.ErasureStreamHeaderParser.TryRead(System.IO.Stream! member, out TeeForge.ErasureCoding.ErasureStreamHeader? header) -> bool
-static TeeForge.ErasureCoding.ErasureStreamOptions.Default.get -> TeeForge.ErasureCoding.ErasureStreamOptions!
 static TeeForge.Networking.MultipathControlMessage.CreateEndpointAdvertisement(string! endpointScheme, System.ReadOnlyMemory<byte> endpointData) -> TeeForge.Networking.MultipathControlMessage!
 static TeeForge.Networking.MultipathControlMessage.CreateModeChangeRequest(TeeForge.Networking.MultipathStreamMode mode, int dataShardCount = 0, int parityShardCount = 0) -> TeeForge.Networking.MultipathControlMessage!
 static TeeForge.Networking.MultipathControlMessage.CreateReliablePath(System.Guid pathId) -> TeeForge.Networking.MultipathControlMessage!
-TeeForge.ErasureCoding.ErasureStream
-TeeForge.ErasureCoding.ErasureStream.BlockSize.get -> int
-TeeForge.ErasureCoding.ErasureStream.CanReadAt.get -> bool
-TeeForge.ErasureCoding.ErasureStream.CanWriteAt.get -> bool
-TeeForge.ErasureCoding.ErasureStream.CompleteAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-TeeForge.ErasureCoding.ErasureStream.DataOffset.get -> long
-TeeForge.ErasureCoding.ErasureStream.DataShardCount.get -> int
-TeeForge.ErasureCoding.ErasureStream.IncreaseParityAsync(System.IO.Stream! newParityImage, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-TeeForge.ErasureCoding.ErasureStream.LogicalLength.get -> long
-TeeForge.ErasureCoding.ErasureStream.MemberIds.get -> System.Collections.Generic.IReadOnlyList<System.Guid>!
-TeeForge.ErasureCoding.ErasureStream.MissingMemberPositions.get -> System.Collections.Generic.IReadOnlyList<int>!
-TeeForge.ErasureCoding.ErasureStream.ParityShardCount.get -> int
-TeeForge.ErasureCoding.ErasureStream.ReadAt(System.Span<byte> buffer, long offset) -> int
-TeeForge.ErasureCoding.ErasureStream.ReadAtAsync(System.Memory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
-TeeForge.ErasureCoding.ErasureStream.ReduceParityAsync(int newParityCount, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<System.IO.Stream!>!>
-TeeForge.ErasureCoding.ErasureStream.ReplaceParityImageAsync(int parityIndex, System.IO.Stream! replacement, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-TeeForge.ErasureCoding.ErasureStream.SetId.get -> System.Guid
-TeeForge.ErasureCoding.ErasureStream.WriteAt(System.ReadOnlySpan<byte> buffer, long offset) -> void
-TeeForge.ErasureCoding.ErasureStream.WriteAtAsync(System.ReadOnlyMemory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-TeeForge.ErasureCoding.ErasureStreamFormat
-TeeForge.ErasureCoding.ErasureStreamFormat.Raw = 0 -> TeeForge.ErasureCoding.ErasureStreamFormat
-TeeForge.ErasureCoding.ErasureStreamFormat.SelfDescribing = 1 -> TeeForge.ErasureCoding.ErasureStreamFormat
-TeeForge.ErasureCoding.ErasureStreamHeader
-TeeForge.ErasureCoding.ErasureStreamHeader.BlockSize.get -> uint
-TeeForge.ErasureCoding.ErasureStreamHeader.CodecId.get -> uint
-TeeForge.ErasureCoding.ErasureStreamHeader.CompatibleFeatures.get -> ulong
-TeeForge.ErasureCoding.ErasureStreamHeader.ConfigurationGeneration.get -> ulong
-TeeForge.ErasureCoding.ErasureStreamHeader.ConfigurationId.get -> System.Guid
-TeeForge.ErasureCoding.ErasureStreamHeader.DataAlignment.get -> uint
-TeeForge.ErasureCoding.ErasureStreamHeader.DataOffset.get -> ulong
-TeeForge.ErasureCoding.ErasureStreamHeader.DataShardCount.get -> ushort
-TeeForge.ErasureCoding.ErasureStreamHeader.LayoutId.get -> uint
-TeeForge.ErasureCoding.ErasureStreamHeader.LogicalLength.get -> ulong
-TeeForge.ErasureCoding.ErasureStreamHeader.MajorVersion.get -> ushort
-TeeForge.ErasureCoding.ErasureStreamHeader.MemberCount.get -> int
-TeeForge.ErasureCoding.ErasureStreamHeader.MemberId.get -> System.Guid
-TeeForge.ErasureCoding.ErasureStreamHeader.MemberIds.get -> System.Collections.Generic.IReadOnlyList<System.Guid>!
-TeeForge.ErasureCoding.ErasureStreamHeader.MemberPosition.get -> ushort
-TeeForge.ErasureCoding.ErasureStreamHeader.MemberRecordSize.get -> uint
-TeeForge.ErasureCoding.ErasureStreamHeader.MinorVersion.get -> ushort
-TeeForge.ErasureCoding.ErasureStreamHeader.ParityShardCount.get -> ushort
-TeeForge.ErasureCoding.ErasureStreamHeader.RequiredFeatures.get -> ulong
-TeeForge.ErasureCoding.ErasureStreamHeader.SetId.get -> System.Guid
-TeeForge.ErasureCoding.ErasureStreamHeaderParser
-TeeForge.ErasureCoding.ErasureStreamOptions
-TeeForge.ErasureCoding.ErasureStreamOptions.ErasureStreamOptions(TeeForge.ErasureCoding.ErasureStreamFormat format = TeeForge.ErasureCoding.ErasureStreamFormat.SelfDescribing, bool requireAllMembers = true, bool leaveOpen = false, long maximumCacheBytes = 67108864, int readAheadBlockCount = 1) -> void
-TeeForge.ErasureCoding.ErasureStreamOptions.Format.get -> TeeForge.ErasureCoding.ErasureStreamFormat
-TeeForge.ErasureCoding.ErasureStreamOptions.LeaveOpen.get -> bool
-TeeForge.ErasureCoding.ErasureStreamOptions.MaximumCacheBytes.get -> long
-TeeForge.ErasureCoding.ErasureStreamOptions.ReadAheadBlockCount.get -> int
-TeeForge.ErasureCoding.ErasureStreamOptions.RequireAllMembers.get -> bool
 TeeForge.Networking.MultipathControlChannel
 TeeForge.Networking.MultipathControlChannel.CanReceive.get -> bool
 TeeForge.Networking.MultipathControlChannel.CanSend.get -> bool
@@ -208,115 +170,6 @@ TeeForge.Networking.MultipathStreamOptions.Mode.get -> TeeForge.Networking.Multi
 TeeForge.Networking.MultipathStreamOptions.MultipathStreamOptions(TeeForge.Networking.MultipathStreamMode mode = TeeForge.Networking.MultipathStreamMode.Raid1, int framePayloadSize = 16384, int erasureDataShardCount = 4, int erasureParityShardCount = 2, int pathQueueCapacity = 8, int maximumReorderGroups = 1024, System.TimeSpan? pathAvailabilityTimeout = null, bool leaveOpen = false) -> void
 TeeForge.Networking.MultipathStreamOptions.PathAvailabilityTimeout.get -> System.TimeSpan
 TeeForge.Networking.MultipathStreamOptions.PathQueueCapacity.get -> int
-TeeForge.Sparse.DifferencingStream
-TeeForge.Sparse.DifferencingStream.BaseDataWriteId.get -> System.Guid
-TeeForge.Sparse.DifferencingStream.BaseId.get -> System.Guid
-TeeForge.Sparse.DifferencingStream.BaseStream.get -> System.IO.Stream!
-TeeForge.Sparse.DifferencingStream.BlockSize.get -> int
-TeeForge.Sparse.DifferencingStream.CanReadAt.get -> bool
-TeeForge.Sparse.DifferencingStream.CanWriteAt.get -> bool
-TeeForge.Sparse.DifferencingStream.Compact(TeeForge.Sparse.DynamicAllocationCompactionMode mode = TeeForge.Sparse.DynamicAllocationCompactionMode.Fast) -> long
-TeeForge.Sparse.DifferencingStream.CompactAsync(TeeForge.Sparse.DynamicAllocationCompactionMode mode = TeeForge.Sparse.DynamicAllocationCompactionMode.Fast, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<long>
-TeeForge.Sparse.DifferencingStream.DataWriteId.get -> System.Guid
-TeeForge.Sparse.DifferencingStream.DependentStreamIds.get -> System.Collections.Generic.IReadOnlyCollection<System.Guid>!
-TeeForge.Sparse.DifferencingStream.DifferenceStream.get -> System.IO.Stream!
-TeeForge.Sparse.DifferencingStream.EstimateCompactionSavings() -> long
-TeeForge.Sparse.DifferencingStream.EstimateCompactionSavingsAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<long>
-TeeForge.Sparse.DifferencingStream.HasDependentStreams.get -> bool
-TeeForge.Sparse.DifferencingStream.Id.get -> System.Guid
-TeeForge.Sparse.DifferencingStream.IsReadOnly.get -> bool
-TeeForge.Sparse.DifferencingStream.OpenReadRangeAsync(long offset, long length, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.IO.Stream!>
-TeeForge.Sparse.DifferencingStream.ParentPathHint.get -> string?
-TeeForge.Sparse.DifferencingStream.ReadAt(System.Span<byte> buffer, long offset) -> int
-TeeForge.Sparse.DifferencingStream.ReadAtAsync(System.Memory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
-TeeForge.Sparse.DifferencingStream.RegisterDependentStream(System.Guid id) -> void
-TeeForge.Sparse.DifferencingStream.RegisterDependentStreamAsync(System.Guid id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-TeeForge.Sparse.DifferencingStream.Trim(long offset, long length) -> void
-TeeForge.Sparse.DifferencingStream.TrimAsync(long offset, long length, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-TeeForge.Sparse.DifferencingStream.UnregisterDependentStream(System.Guid id) -> void
-TeeForge.Sparse.DifferencingStream.UnregisterDependentStreamAsync(System.Guid id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-TeeForge.Sparse.DifferencingStream.VirtualCapacity.get -> long
-TeeForge.Sparse.DifferencingStream.WriteAt(System.ReadOnlySpan<byte> buffer, long offset) -> void
-TeeForge.Sparse.DifferencingStream.WriteAtAsync(System.ReadOnlyMemory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-TeeForge.Sparse.DifferencingStreamLocator
-TeeForge.Sparse.DifferencingStreamLocator.BaseDataWriteId.get -> System.Guid
-TeeForge.Sparse.DifferencingStreamLocator.BaseId.get -> System.Guid
-TeeForge.Sparse.DifferencingStreamLocator.BlockSize.get -> int
-TeeForge.Sparse.DifferencingStreamLocator.ParentPathHint.get -> string?
-TeeForge.Sparse.DifferencingStreamLocator.VirtualCapacity.get -> long
-TeeForge.Sparse.DifferencingStreamBaseMismatchException
-TeeForge.Sparse.DifferencingStreamBaseMismatchException.DifferencingStreamBaseMismatchException(string! message) -> void
-TeeForge.Sparse.DifferencingStreamBaseMismatchException.DifferencingStreamBaseMismatchException(string! message, System.Exception! innerException) -> void
-TeeForge.Sparse.DifferencingStreamOptions
-TeeForge.Sparse.DifferencingStreamOptions.DifferencingStreamOptions(bool leaveBaseOpen = false, bool leaveDifferenceOpen = false, bool readOnly = false, bool notifyBaseOnCreate = false) -> void
-TeeForge.Sparse.DifferencingStreamOptions.LeaveBaseOpen.get -> bool
-TeeForge.Sparse.DifferencingStreamOptions.LeaveDifferenceOpen.get -> bool
-TeeForge.Sparse.DifferencingStreamOptions.NotifyBaseOnCreate.get -> bool
-TeeForge.Sparse.DifferencingStreamOptions.ReadOnly.get -> bool
-TeeForge.Sparse.DynamicAllocationStream.DataWriteId.get -> System.Guid
-TeeForge.Sparse.DynamicAllocationStream.DependentStreamIds.get -> System.Collections.Generic.IReadOnlyCollection<System.Guid>!
-TeeForge.Sparse.DynamicAllocationStream.HasDependentStreams.get -> bool
-TeeForge.Sparse.DynamicAllocationStream.RegisterDependentStream(System.Guid id) -> void
-TeeForge.Sparse.DynamicAllocationStream.RegisterDependentStreamAsync(System.Guid id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-TeeForge.Sparse.DynamicAllocationStream.UnregisterDependentStream(System.Guid id) -> void
-TeeForge.Sparse.DynamicAllocationStream.UnregisterDependentStreamAsync(System.Guid id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-TeeForge.Sparse.DynamicAllocationStream.VirtualCapacity.get -> long
-TeeForge.Sparse.IDependentStreamRegistry
-TeeForge.Sparse.IDependentStreamRegistry.DependentStreamIds.get -> System.Collections.Generic.IReadOnlyCollection<System.Guid>!
-TeeForge.Sparse.IDependentStreamRegistry.HasDependentStreams.get -> bool
-TeeForge.Sparse.IDependentStreamRegistry.RegisterDependentStream(System.Guid id) -> void
-TeeForge.Sparse.IDependentStreamRegistry.RegisterDependentStreamAsync(System.Guid id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-TeeForge.Sparse.IDependentStreamRegistry.UnregisterDependentStream(System.Guid id) -> void
-TeeForge.Sparse.IDependentStreamRegistry.UnregisterDependentStreamAsync(System.Guid id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-TeeForge.Sparse.IStreamIdentity
-TeeForge.Sparse.IStreamIdentity.DataWriteId.get -> System.Guid
-TeeForge.Sparse.IStreamIdentity.Id.get -> System.Guid
-TeeForge.Sparse.IVirtualDiskStream
-TeeForge.Sparse.IVirtualDiskStream.BlockSize.get -> int
-TeeForge.Sparse.IVirtualDiskStream.VirtualCapacity.get -> long
-TeeForge.Sparse.StreamIdentity
-TeeForge.Sparse.StreamIdentity.DataWriteId.get -> System.Guid
-TeeForge.Sparse.StreamIdentity.Equals(TeeForge.Sparse.StreamIdentity other) -> bool
-TeeForge.Sparse.StreamIdentity.Id.get -> System.Guid
-TeeForge.Sparse.StreamIdentity.StreamIdentity() -> void
-TeeForge.Sparse.StreamIdentity.StreamIdentity(System.Guid id, System.Guid dataWriteId) -> void
-override TeeForge.Sparse.DifferencingStream.CanRead.get -> bool
-override TeeForge.Sparse.DifferencingStream.CanSeek.get -> bool
-override TeeForge.Sparse.DifferencingStream.CanWrite.get -> bool
-override TeeForge.Sparse.DifferencingStream.DisposeAsync() -> System.Threading.Tasks.ValueTask
-override TeeForge.Sparse.DifferencingStream.Flush() -> void
-override TeeForge.Sparse.DifferencingStream.FlushAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
-override TeeForge.Sparse.DifferencingStream.Length.get -> long
-override TeeForge.Sparse.DifferencingStream.Position.get -> long
-override TeeForge.Sparse.DifferencingStream.Position.set -> void
-override TeeForge.Sparse.DifferencingStream.Read(System.Span<byte> buffer) -> int
-override TeeForge.Sparse.DifferencingStream.Read(byte[]! buffer, int offset, int count) -> int
-override TeeForge.Sparse.DifferencingStream.ReadAsync(System.Memory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
-override TeeForge.Sparse.DifferencingStream.ReadAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<int>!
-override TeeForge.Sparse.DifferencingStream.Seek(long offset, System.IO.SeekOrigin origin) -> long
-override TeeForge.Sparse.DifferencingStream.SetLength(long value) -> void
-override TeeForge.Sparse.DifferencingStream.Write(System.ReadOnlySpan<byte> buffer) -> void
-override TeeForge.Sparse.DifferencingStream.Write(byte[]! buffer, int offset, int count) -> void
-override TeeForge.Sparse.DifferencingStream.WriteAsync(System.ReadOnlyMemory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-override TeeForge.Sparse.DifferencingStream.WriteAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
-override TeeForge.Sparse.StreamIdentity.GetHashCode() -> int
-static TeeForge.Sparse.DifferencingStream.Create(System.IO.Stream! baseStream, System.IO.Stream! differenceStream, TeeForge.Sparse.DifferencingStreamOptions? options = null, string? parentPathHint = null) -> TeeForge.Sparse.DifferencingStream!
-static TeeForge.Sparse.DifferencingStream.Create(System.IO.Stream! baseStream, System.IO.Stream! differenceStream, TeeForge.Sparse.StreamIdentity baseIdentity, long virtualCapacity, int blockSize = 1048576, TeeForge.Sparse.DifferencingStreamOptions? options = null, string? parentPathHint = null) -> TeeForge.Sparse.DifferencingStream!
-static TeeForge.Sparse.DifferencingStream.CreateAsync(System.IO.Stream! baseStream, System.IO.Stream! differenceStream, TeeForge.Sparse.DifferencingStreamOptions? options = null, string? parentPathHint = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TeeForge.Sparse.DifferencingStream!>
-static TeeForge.Sparse.DifferencingStream.CreateAsync(System.IO.Stream! baseStream, System.IO.Stream! differenceStream, TeeForge.Sparse.StreamIdentity baseIdentity, long virtualCapacity, int blockSize = 1048576, TeeForge.Sparse.DifferencingStreamOptions? options = null, string? parentPathHint = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TeeForge.Sparse.DifferencingStream!>
-static TeeForge.Sparse.DifferencingStream.Open(System.IO.Stream! baseStream, System.IO.Stream! differenceStream, TeeForge.Sparse.DifferencingStreamOptions? options = null) -> TeeForge.Sparse.DifferencingStream!
-static TeeForge.Sparse.DifferencingStream.Open(System.IO.Stream! baseStream, System.IO.Stream! differenceStream, TeeForge.Sparse.StreamIdentity baseIdentity, TeeForge.Sparse.DifferencingStreamOptions? options = null) -> TeeForge.Sparse.DifferencingStream!
-static TeeForge.Sparse.DifferencingStream.OpenAsync(System.IO.Stream! baseStream, System.IO.Stream! differenceStream, TeeForge.Sparse.DifferencingStreamOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TeeForge.Sparse.DifferencingStream!>
-static TeeForge.Sparse.DifferencingStream.OpenAsync(System.IO.Stream! baseStream, System.IO.Stream! differenceStream, TeeForge.Sparse.StreamIdentity baseIdentity, TeeForge.Sparse.DifferencingStreamOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TeeForge.Sparse.DifferencingStream!>
-static TeeForge.Sparse.DifferencingStream.ReadLocator(System.IO.Stream! differenceStream) -> TeeForge.Sparse.DifferencingStreamLocator!
-static TeeForge.Sparse.DifferencingStream.ReadLocatorAsync(System.IO.Stream! differenceStream, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TeeForge.Sparse.DifferencingStreamLocator!>
-static TeeForge.Sparse.DifferencingStreamOptions.Default.get -> TeeForge.Sparse.DifferencingStreamOptions!
-static TeeForge.Sparse.DynamicAllocationStream.Create(System.IO.Stream! underlying, long virtualCapacity, int blockSize = 1048576, TeeForge.Sparse.DynamicAllocationStreamOptions? options = null) -> TeeForge.Sparse.DynamicAllocationStream!
-static TeeForge.Sparse.DynamicAllocationStream.CreateAsync(System.IO.Stream! underlying, long virtualCapacity, int blockSize = 1048576, TeeForge.Sparse.DynamicAllocationStreamOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TeeForge.Sparse.DynamicAllocationStream!>
-static TeeForge.Sparse.StreamIdentity.operator !=(TeeForge.Sparse.StreamIdentity left, TeeForge.Sparse.StreamIdentity right) -> bool
-static TeeForge.Sparse.StreamIdentity.operator ==(TeeForge.Sparse.StreamIdentity left, TeeForge.Sparse.StreamIdentity right) -> bool
-~override TeeForge.Sparse.StreamIdentity.Equals(object obj) -> bool
-~override TeeForge.Sparse.StreamIdentity.ToString() -> string
 override TeeForge.RandomAccess.RandomAccessMemoryStream.Capacity.get -> int
 override TeeForge.RandomAccess.RandomAccessMemoryStream.Capacity.set -> void
 override TeeForge.RandomAccess.RandomAccessMemoryStream.CopyTo(System.IO.Stream! destination, int bufferSize) -> void
@@ -494,140 +347,6 @@ TeeForge.Composition.HandoffStream.ReadAt(System.Span<byte> buffer, long offset)
 TeeForge.Composition.HandoffStream.ReadAtAsync(System.Memory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
 TeeForge.Composition.HandoffStream.WriteAt(System.ReadOnlySpan<byte> buffer, long offset) -> void
 TeeForge.Composition.HandoffStream.WriteAtAsync(System.ReadOnlyMemory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-override TeeForge.ErasureCoding.ErasureCodeStream.CanRead.get -> bool
-override TeeForge.ErasureCoding.ErasureCodeStream.CanSeek.get -> bool
-override TeeForge.ErasureCoding.ErasureCodeStream.CanWrite.get -> bool
-override TeeForge.ErasureCoding.ErasureCodeStream.DisposeAsync() -> System.Threading.Tasks.ValueTask
-override TeeForge.ErasureCoding.ErasureCodeStream.Flush() -> void
-override TeeForge.ErasureCoding.ErasureCodeStream.FlushAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
-override TeeForge.ErasureCoding.ErasureCodeStream.Length.get -> long
-override TeeForge.ErasureCoding.ErasureCodeStream.Position.get -> long
-override TeeForge.ErasureCoding.ErasureCodeStream.Position.set -> void
-override TeeForge.ErasureCoding.ErasureCodeStream.Read(byte[]! buffer, int offset, int count) -> int
-override TeeForge.ErasureCoding.ErasureCodeStream.Read(System.Span<byte> buffer) -> int
-override TeeForge.ErasureCoding.ErasureCodeStream.ReadAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<int>!
-override TeeForge.ErasureCoding.ErasureCodeStream.ReadAsync(System.Memory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
-override TeeForge.ErasureCoding.ErasureCodeStream.Seek(long offset, System.IO.SeekOrigin origin) -> long
-override TeeForge.ErasureCoding.ErasureCodeStream.SetLength(long value) -> void
-override TeeForge.ErasureCoding.ErasureCodeStream.Write(byte[]! buffer, int offset, int count) -> void
-override TeeForge.ErasureCoding.ErasureCodeStream.Write(System.ReadOnlySpan<byte> buffer) -> void
-override TeeForge.ErasureCoding.ErasureCodeStream.WriteAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
-override TeeForge.ErasureCoding.ErasureCodeStream.WriteAsync(System.ReadOnlyMemory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-static TeeForge.ErasureCoding.ErasureCodeStream.Create(System.Collections.Generic.IEnumerable<System.IO.Stream!>! members, int dataShardCount, int parityShardCount, long logicalCapacity, int shardSize = 1048576, TeeForge.ErasureCoding.ErasureCodeStreamOptions? options = null) -> TeeForge.ErasureCoding.ErasureCodeStream!
-static TeeForge.ErasureCoding.ErasureCodeStream.CreateAsync(System.Collections.Generic.IEnumerable<System.IO.Stream!>! members, int dataShardCount, int parityShardCount, long logicalCapacity, int shardSize = 1048576, TeeForge.ErasureCoding.ErasureCodeStreamOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TeeForge.ErasureCoding.ErasureCodeStream!>
-static TeeForge.ErasureCoding.ErasureCodeStream.Open(System.Collections.Generic.IEnumerable<System.IO.Stream!>! members, TeeForge.ErasureCoding.ErasureCodeStreamOptions? options = null) -> TeeForge.ErasureCoding.ErasureCodeStream!
-static TeeForge.ErasureCoding.ErasureCodeStream.OpenAsync(System.Collections.Generic.IEnumerable<System.IO.Stream!>! members, TeeForge.ErasureCoding.ErasureCodeStreamOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TeeForge.ErasureCoding.ErasureCodeStream!>
-static TeeForge.ErasureCoding.ErasureCodeStreamOptions.Default.get -> TeeForge.ErasureCoding.ErasureCodeStreamOptions!
-static TeeForge.ErasureCoding.ErasureMaintenanceOptions.Default.get -> TeeForge.ErasureCoding.ErasureMaintenanceOptions!
-TeeForge.ErasureCoding.ErasureCodeStream
-TeeForge.ErasureCoding.ErasureCodeStream.CanReadAt.get -> bool
-TeeForge.ErasureCoding.ErasureCodeStream.CanWriteAt.get -> bool
-TeeForge.ErasureCoding.ErasureCodeStream.CheckConsistencyAsync(TeeForge.ErasureCoding.ErasureMaintenanceOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TeeForge.ErasureCoding.ErasureConsistencyCheckResult!>
-TeeForge.ErasureCoding.ErasureCodeStream.ConfigurationId.get -> System.Guid
-TeeForge.ErasureCoding.ErasureCodeStream.DataShardCount.get -> int
-TeeForge.ErasureCoding.ErasureCodeStream.GetState() -> TeeForge.ErasureCoding.ErasureCodeStreamState!
-TeeForge.ErasureCoding.ErasureCodeStream.IsReadOnly.get -> bool
-TeeForge.ErasureCoding.ErasureCodeStream.ParityShardCount.get -> int
-TeeForge.ErasureCoding.ErasureCodeStream.ReadAt(System.Span<byte> buffer, long offset) -> int
-TeeForge.ErasureCoding.ErasureCodeStream.ReadAtAsync(System.Memory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
-TeeForge.ErasureCoding.ErasureCodeStream.RegisterMaintenanceHandler(System.Action<TeeForge.ErasureCoding.ErasureMaintenanceProgress!>! handler) -> System.IDisposable!
-TeeForge.ErasureCoding.ErasureCodeStream.RegisterStateChangeHandler(System.Action<TeeForge.ErasureCoding.ErasureCodeStreamStateChangedEventArgs!>! handler, bool invokeImmediately = true) -> System.IDisposable!
-TeeForge.ErasureCoding.ErasureCodeStream.SetId.get -> System.Guid
-TeeForge.ErasureCoding.ErasureCodeStream.ShardSize.get -> int
-TeeForge.ErasureCoding.ErasureCodeStream.WriteAt(System.ReadOnlySpan<byte> buffer, long offset) -> void
-TeeForge.ErasureCoding.ErasureCodeStream.WriteAtAsync(System.ReadOnlyMemory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-TeeForge.ErasureCoding.ErasureCodeStreamCorruptionException
-TeeForge.ErasureCoding.ErasureCodeStreamCorruptionException.ErasureCodeStreamCorruptionException(string! message, System.Exception? innerException = null) -> void
-TeeForge.ErasureCoding.ErasureCodeStreamOptions
-TeeForge.ErasureCoding.ErasureCodeStreamOptions.ErasureCodeStreamOptions(bool leaveOpen = false, bool readOnly = false, int journalSlotCount = 4, int latencySampleRate = 64) -> void
-TeeForge.ErasureCoding.ErasureCodeStreamOptions.JournalSlotCount.get -> int
-TeeForge.ErasureCoding.ErasureCodeStreamOptions.LatencySampleRate.get -> int
-TeeForge.ErasureCoding.ErasureCodeStreamOptions.LeaveOpen.get -> bool
-TeeForge.ErasureCoding.ErasureCodeStreamOptions.ReadOnly.get -> bool
-TeeForge.ErasureCoding.ErasureCodeStreamState
-TeeForge.ErasureCoding.ErasureCodeStreamState.CanRead.get -> bool
-TeeForge.ErasureCoding.ErasureCodeStreamState.CanWrite.get -> bool
-TeeForge.ErasureCoding.ErasureCodeStreamState.IsReadOnly.get -> bool
-TeeForge.ErasureCoding.ErasureCodeStreamState.Members.get -> System.Collections.Generic.IReadOnlyList<TeeForge.ErasureCoding.ErasureMemberState!>!
-TeeForge.ErasureCoding.ErasureCodeStreamState.ObservedAt.get -> System.DateTimeOffset
-TeeForge.ErasureCoding.ErasureCodeStreamState.ReadQuorum.get -> int
-TeeForge.ErasureCoding.ErasureCodeStreamState.Status.get -> TeeForge.ErasureCoding.ErasureCodeStreamStatus
-TeeForge.ErasureCoding.ErasureCodeStreamState.WriteQuorum.get -> int
-TeeForge.ErasureCoding.ErasureCodeStreamStateChangedEventArgs
-TeeForge.ErasureCoding.ErasureCodeStreamStateChangedEventArgs.Current.get -> TeeForge.ErasureCoding.ErasureCodeStreamState!
-TeeForge.ErasureCoding.ErasureCodeStreamStateChangedEventArgs.Previous.get -> TeeForge.ErasureCoding.ErasureCodeStreamState!
-TeeForge.ErasureCoding.ErasureCodeStreamStatus
-TeeForge.ErasureCoding.ErasureCodeStreamStatus.Degraded = 1 -> TeeForge.ErasureCoding.ErasureCodeStreamStatus
-TeeForge.ErasureCoding.ErasureCodeStreamStatus.Disposed = 4 -> TeeForge.ErasureCoding.ErasureCodeStreamStatus
-TeeForge.ErasureCoding.ErasureCodeStreamStatus.Faulted = 3 -> TeeForge.ErasureCoding.ErasureCodeStreamStatus
-TeeForge.ErasureCoding.ErasureCodeStreamStatus.Healthy = 0 -> TeeForge.ErasureCoding.ErasureCodeStreamStatus
-TeeForge.ErasureCoding.ErasureCodeStreamStatus.Unavailable = 2 -> TeeForge.ErasureCoding.ErasureCodeStreamStatus
-TeeForge.ErasureCoding.ErasureConsistencyCheckResult
-TeeForge.ErasureCoding.ErasureConsistencyCheckResult.CheckedBytes.get -> long
-TeeForge.ErasureCoding.ErasureConsistencyCheckResult.CheckedStripes.get -> long
-TeeForge.ErasureCoding.ErasureConsistencyCheckResult.InconsistentMemberPositions.get -> System.Collections.Generic.IReadOnlyList<int>!
-TeeForge.ErasureCoding.ErasureConsistencyCheckResult.IsConsistent.get -> bool
-TeeForge.ErasureCoding.ErasureConsistencyCheckResult.OperationId.get -> System.Guid
-TeeForge.ErasureCoding.ErasureMaintenanceOperation
-TeeForge.ErasureCoding.ErasureMaintenanceOperation.ConsistencyCheck = 0 -> TeeForge.ErasureCoding.ErasureMaintenanceOperation
-TeeForge.ErasureCoding.ErasureMaintenanceOptions
-TeeForge.ErasureCoding.ErasureMaintenanceOptions.BackgroundDelay.get -> System.TimeSpan
-TeeForge.ErasureCoding.ErasureMaintenanceOptions.ErasureMaintenanceOptions(TeeForge.ErasureCoding.ErasureMaintenancePriority priority = TeeForge.ErasureCoding.ErasureMaintenancePriority.Background, long maximumBytesPerSecond = 0, System.TimeSpan? backgroundDelay = null) -> void
-TeeForge.ErasureCoding.ErasureMaintenanceOptions.MaximumBytesPerSecond.get -> long
-TeeForge.ErasureCoding.ErasureMaintenanceOptions.Priority.get -> TeeForge.ErasureCoding.ErasureMaintenancePriority
-TeeForge.ErasureCoding.ErasureMaintenancePriority
-TeeForge.ErasureCoding.ErasureMaintenancePriority.Background = 2 -> TeeForge.ErasureCoding.ErasureMaintenancePriority
-TeeForge.ErasureCoding.ErasureMaintenancePriority.Balanced = 1 -> TeeForge.ErasureCoding.ErasureMaintenancePriority
-TeeForge.ErasureCoding.ErasureMaintenancePriority.Foreground = 0 -> TeeForge.ErasureCoding.ErasureMaintenancePriority
-TeeForge.ErasureCoding.ErasureMaintenanceProgress
-TeeForge.ErasureCoding.ErasureMaintenanceProgress.CompletedBytes.get -> long
-TeeForge.ErasureCoding.ErasureMaintenanceProgress.Error.get -> System.Exception?
-TeeForge.ErasureCoding.ErasureMaintenanceProgress.InconsistentMembers.get -> int
-TeeForge.ErasureCoding.ErasureMaintenanceProgress.Operation.get -> TeeForge.ErasureCoding.ErasureMaintenanceOperation
-TeeForge.ErasureCoding.ErasureMaintenanceProgress.OperationId.get -> System.Guid
-TeeForge.ErasureCoding.ErasureMaintenanceProgress.Status.get -> TeeForge.ErasureCoding.ErasureMaintenanceStatus
-TeeForge.ErasureCoding.ErasureMaintenanceProgress.TotalBytes.get -> long
-TeeForge.ErasureCoding.ErasureMaintenanceStatus
-TeeForge.ErasureCoding.ErasureMaintenanceStatus.Canceled = 2 -> TeeForge.ErasureCoding.ErasureMaintenanceStatus
-TeeForge.ErasureCoding.ErasureMaintenanceStatus.Completed = 1 -> TeeForge.ErasureCoding.ErasureMaintenanceStatus
-TeeForge.ErasureCoding.ErasureMaintenanceStatus.Faulted = 3 -> TeeForge.ErasureCoding.ErasureMaintenanceStatus
-TeeForge.ErasureCoding.ErasureMaintenanceStatus.Running = 0 -> TeeForge.ErasureCoding.ErasureMaintenanceStatus
-TeeForge.ErasureCoding.ErasureMemberPerformance
-TeeForge.ErasureCoding.ErasureMemberPerformance.BytesRead.get -> long
-TeeForge.ErasureCoding.ErasureMemberPerformance.BytesWritten.get -> long
-TeeForge.ErasureCoding.ErasureMemberPerformance.Errors.get -> long
-TeeForge.ErasureCoding.ErasureMemberPerformance.FlushLatencyMilliseconds.get -> double
-TeeForge.ErasureCoding.ErasureMemberPerformance.FlushOperations.get -> long
-TeeForge.ErasureCoding.ErasureMemberPerformance.LatencyBuckets.get -> System.Collections.Generic.IReadOnlyList<long>!
-TeeForge.ErasureCoding.ErasureMemberPerformance.MaximumSampledLatencyMilliseconds.get -> double
-TeeForge.ErasureCoding.ErasureMemberPerformance.ReadLatencyMilliseconds.get -> double
-TeeForge.ErasureCoding.ErasureMemberPerformance.ReadOperations.get -> long
-TeeForge.ErasureCoding.ErasureMemberPerformance.ReadThroughputBytesPerSecond.get -> double
-TeeForge.ErasureCoding.ErasureMemberPerformance.ReconstructionBytes.get -> long
-TeeForge.ErasureCoding.ErasureMemberPerformance.SampledFlushes.get -> long
-TeeForge.ErasureCoding.ErasureMemberPerformance.SampledReads.get -> long
-TeeForge.ErasureCoding.ErasureMemberPerformance.SampledWrites.get -> long
-TeeForge.ErasureCoding.ErasureMemberPerformance.WriteLatencyMilliseconds.get -> double
-TeeForge.ErasureCoding.ErasureMemberPerformance.WriteOperations.get -> long
-TeeForge.ErasureCoding.ErasureMemberPerformance.WriteThroughputBytesPerSecond.get -> double
-TeeForge.ErasureCoding.ErasureMemberRole
-TeeForge.ErasureCoding.ErasureMemberRole.Data = 0 -> TeeForge.ErasureCoding.ErasureMemberRole
-TeeForge.ErasureCoding.ErasureMemberRole.Parity = 1 -> TeeForge.ErasureCoding.ErasureMemberRole
-TeeForge.ErasureCoding.ErasureMemberState
-TeeForge.ErasureCoding.ErasureMemberState.CanRead.get -> bool
-TeeForge.ErasureCoding.ErasureMemberState.CanWrite.get -> bool
-TeeForge.ErasureCoding.ErasureMemberState.MemberId.get -> System.Guid
-TeeForge.ErasureCoding.ErasureMemberState.Performance.get -> TeeForge.ErasureCoding.ErasureMemberPerformance!
-TeeForge.ErasureCoding.ErasureMemberState.Position.get -> int
-TeeForge.ErasureCoding.ErasureMemberState.Role.get -> TeeForge.ErasureCoding.ErasureMemberRole
-TeeForge.ErasureCoding.ErasureMemberState.Status.get -> TeeForge.ErasureCoding.ErasureMemberStatus
-TeeForge.ErasureCoding.ErasureMemberStatus
-TeeForge.ErasureCoding.ErasureMemberStatus.Corrupt = 3 -> TeeForge.ErasureCoding.ErasureMemberStatus
-TeeForge.ErasureCoding.ErasureMemberStatus.Missing = 1 -> TeeForge.ErasureCoding.ErasureMemberStatus
-TeeForge.ErasureCoding.ErasureMemberStatus.Online = 0 -> TeeForge.ErasureCoding.ErasureMemberStatus
-TeeForge.ErasureCoding.ErasureMemberStatus.Rebuilding = 4 -> TeeForge.ErasureCoding.ErasureMemberStatus
-TeeForge.ErasureCoding.ErasureMemberStatus.Retired = 5 -> TeeForge.ErasureCoding.ErasureMemberStatus
-TeeForge.ErasureCoding.ErasureMemberStatus.Stale = 2 -> TeeForge.ErasureCoding.ErasureMemberStatus
 TeeForge.Networking.NamedQuicStream
 TeeForge.Networking.NamedQuicStream.Abort(System.Net.Quic.QuicAbortDirection direction, long errorCode) -> void
 TeeForge.Networking.NamedQuicStream.CompleteWrites() -> void

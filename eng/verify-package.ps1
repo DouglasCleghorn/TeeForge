@@ -42,6 +42,13 @@ try {
         }
     }
 
+    $unexpectedAssemblies = @($entries | Where-Object {
+        $_ -like "lib/*.dll" -and $_ -ne "lib/net10.0/TeeForge.dll"
+    })
+    if ($unexpectedAssemblies.Count -ne 0) {
+        throw "Core package must contain only TeeForge.dll: $($unexpectedAssemblies -join ', ')."
+    }
+
     $unexpectedFrameworks = @($entries | Where-Object {
         $_ -like "lib/*" -and $_ -notlike "lib/net10.0/*"
     })
@@ -80,7 +87,7 @@ try {
         throw "Unexpected package authors '$($metadata.authors)'."
     }
 
-    $expectedDescription = "High-performance .NET streams for mirrored I/O, buffered fan-out, multi-hashing, broadcast pipelines, sparse storage, HTTP range reads, and mutually authenticated QUIC."
+    $expectedDescription = "High-performance .NET streams for mirrored I/O, write-only replication, buffered fan-out, multi-hashing, broadcast pipelines, headerless erasure coding, HTTP range reads, and mutually authenticated QUIC."
     if ($metadata.description -ne $expectedDescription) {
         throw "Unexpected package description '$($metadata.description)'."
     }
@@ -145,6 +152,10 @@ try {
         throw "Package repository metadata is missing or incorrect."
     }
 
+    if ($repository.commit -notmatch '^[0-9a-f]{40}$') {
+        throw "Package repository commit must be a full Git commit ID."
+    }
+
     $dependencies = @($nuspec.SelectNodes("//*[local-name()='dependency']"))
     if ($dependencies.Count -ne 1) {
         throw "TeeForge must have exactly one runtime NuGet dependency; found $($dependencies.Count)."
@@ -166,6 +177,47 @@ try {
         throw "Symbol package is missing the portable PDB."
     }
 
+    # Read structured PDB paths; string searches miss segmented document names.
+    $pdbStream = $symbolPackage.GetEntry("lib/net10.0/TeeForge.pdb").Open()
+    $pdbCopy = [System.IO.MemoryStream]::new()
+    try {
+        $pdbStream.CopyTo($pdbCopy)
+        $pdbCopy.Position = 0
+        $provider = [System.Reflection.Metadata.MetadataReaderProvider]::FromPortablePdbStream($pdbCopy)
+        try {
+            $metadataReader = $provider.GetMetadataReader(
+                [System.Reflection.Metadata.MetadataReaderOptions]::Default, $null)
+            foreach ($documentHandle in $metadataReader.Documents) {
+                $document = $metadataReader.GetDocument($documentHandle)
+                $documentPath = $metadataReader.GetString($document.Name)
+                if (-not $documentPath.StartsWith('/_/', [System.StringComparison]::Ordinal)) {
+                    throw "PDB contains a non-normalized source path. Rebuild with ContinuousIntegrationBuild=true."
+                }
+            }
+
+            $sourceLinkFound = $false
+            foreach ($handle in $metadataReader.CustomDebugInformation) {
+                $info = $metadataReader.GetCustomDebugInformation($handle)
+                if ($metadataReader.GetGuid($info.Kind) -eq [guid]'CC110556-A091-4D38-9FEC-25AB9A351A6A') {
+                    $sourceLink = [System.Text.Encoding]::UTF8.GetString(
+                        $metadataReader.GetBlobBytes($info.Value)) | ConvertFrom-Json
+                    $expectedSource = "https://raw.githubusercontent.com/DouglasCleghorn/TeeForge/$($repository.commit)/*"
+                    $mappings = @($sourceLink.documents.PSObject.Properties)
+                    if ($mappings.Count -ne 1 -or $mappings[0].Name -ne '/_/*' -or
+                        $mappings[0].Value -ne $expectedSource) {
+                        throw "Source Link must point to this package's exact repository commit."
+                    }
+                    $sourceLinkFound = $true
+                }
+            }
+            if (-not $sourceLinkFound) { throw "Portable PDB is missing Source Link metadata." }
+        }
+        finally { $provider.Dispose() }
+    }
+    finally {
+        $pdbStream.Dispose()
+        $pdbCopy.Dispose()
+    }
 }
 finally {
     $symbolPackage.Dispose()

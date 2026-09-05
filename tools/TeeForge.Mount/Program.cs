@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using TeeForge.Sparse;
+using TeeForge.Experimental.Storage.Sparse;
 
 namespace TeeForge.Mount;
 
@@ -60,7 +60,7 @@ internal static class Program
         Console.WriteLine($"BlockSize: {image.VirtualDisk.BlockSize}");
         Console.WriteLine($"VirtualCapacity: {image.VirtualDisk.VirtualCapacity}");
         Console.WriteLine($"Length: {image.LogicalStream.Length}");
-        if (image.LogicalStream is DifferencingStream difference)
+        if (image.LogicalStream is DifferencingDiskImage difference)
         {
             Console.WriteLine($"BaseId: {difference.BaseId}");
             Console.WriteLine($"BaseDataWriteId: {difference.BaseDataWriteId}");

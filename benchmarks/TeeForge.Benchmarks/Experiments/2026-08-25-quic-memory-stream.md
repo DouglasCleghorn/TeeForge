@@ -60,7 +60,7 @@ Each case transferred the complete 3 GiB logical stream.
 | Write | 1 MiB | 19,119.5 | 241.2 | 1.26% |
 
 The direct path measures memory copies plus the segmented-stream lock and cursor
-logic, not raw DRAM bandwidth. QUIC remains near 240–253 MiB/s, closely matching
+logic, not raw DRAM bandwidth. QUIC remains near 240â€“253 MiB/s, closely matching
 the file run. That demonstrates the local disk was not the limiting component
 of the sequential QUIC result.
 

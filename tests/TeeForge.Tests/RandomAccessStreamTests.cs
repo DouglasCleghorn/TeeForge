@@ -97,31 +97,6 @@ public class RandomAccessStreamTests
         Assert.Equal(primary.ToArray(), mirror.ToArray());
     }
 
-    [Fact]
-    public async Task Dynamic_allocation_translates_logical_offsets_to_upstream_random_access()
-    {
-        await using var backing = new TestRandomAccessStream([]);
-        await using DynamicAllocationStream sparse = DynamicAllocationStream.Create(
-            backing,
-            virtualCapacity: 16L * 64 * 1024,
-            blockSize: 64 * 1024,
-            new DynamicAllocationStreamOptions(
-                leaveOpen: true,
-                freeBlockQueueCapacity: 0,
-                freeBlockQueueLowWatermark: 0));
-        backing.ResetRandomAccessCounts();
-        sparse.Position = 123;
-
-        await sparse.WriteAtAsync(new byte[] { 4, 5, 6, 7 }, 70_000);
-        byte[] read = new byte[4];
-        Assert.Equal(4, await sparse.ReadAtAsync(read, 70_000));
-
-        Assert.Equal([4, 5, 6, 7], read);
-        Assert.Equal(123, sparse.Position);
-        Assert.True(backing.RandomWriteCalls > 0);
-        Assert.True(backing.RandomReadCalls > 0);
-    }
-
     private sealed class TestRandomAccessStream : MemoryStream, ITeeRandomAccessStream
     {
         private readonly object _gate = new();

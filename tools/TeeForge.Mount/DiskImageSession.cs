@@ -1,5 +1,5 @@
 using TeeForge.RandomAccess;
-using TeeForge.Sparse;
+using TeeForge.Experimental.Storage.Sparse;
 
 namespace TeeForge.Mount;
 
@@ -48,9 +48,9 @@ internal sealed class DiskImageSession(Stream logicalStream, string imagePath) :
             var storage = new FileStream(fullPath, FileMode.Open, access, share, 4096, FileOptions.RandomAccess);
             try
             {
-                DynamicAllocationStream disk = DynamicAllocationStream.Open(
+                SparseDiskImage disk = SparseDiskImage.Open(
                     storage,
-                    new DynamicAllocationStreamOptions(
+                    new SparseDiskImageOptions(
                         readOnly: readOnly,
                         freeBlockQueueCapacity: readOnly ? 0 : 4096,
                         freeBlockQueueLowWatermark: readOnly ? 0 : 1024));
@@ -68,7 +68,7 @@ internal sealed class DiskImageSession(Stream logicalStream, string imagePath) :
             throw new NotSupportedException("Mount accepts only .tfdisk and .tfdiff images.");
         }
 
-        DifferencingStreamLocator locator = ReadDifferencingLocator(fullPath);
+        DifferencingDiskImageLocator locator = ReadDifferencingLocator(fullPath);
         string? parentPath = explicitParentPath;
         if (parentPath is null && locator.ParentPathHint is not null)
         {
@@ -95,10 +95,10 @@ internal sealed class DiskImageSession(Stream logicalStream, string imagePath) :
             FileOptions.RandomAccess);
         try
         {
-            DifferencingStream child = DifferencingStream.Open(
+            DifferencingDiskImage child = DifferencingDiskImage.Open(
                 baseSession.LogicalStream,
                 differenceStorage,
-                new DifferencingStreamOptions(readOnly: readOnly));
+                new DifferencingDiskImageOptions(readOnly: readOnly));
             return new DiskImageSession(child, fullPath);
         }
         catch
@@ -109,9 +109,9 @@ internal sealed class DiskImageSession(Stream logicalStream, string imagePath) :
         }
     }
 
-    internal static DifferencingStreamLocator ReadDifferencingLocator(string path)
+    internal static DifferencingDiskImageLocator ReadDifferencingLocator(string path)
     {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        return DifferencingStream.ReadLocator(stream);
+        return DifferencingDiskImage.ReadLocator(stream);
     }
 }
