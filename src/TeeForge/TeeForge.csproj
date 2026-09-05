@@ -34,10 +34,20 @@
     <PackageReference Include="System.IO.Hashing" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="../../README.md" Pack="true" PackagePath="/" />
     <None Include="../../assets/teeforge-icon.png" Pack="true" PackagePath="/" />
     <None Include="../../CHANGELOG.md" Pack="true" PackagePath="/" />
     <None Include="../../LICENSE" Pack="true" PackagePath="/" />
     <None Include="../../THIRD-PARTY-NOTICES.txt" Pack="true" PackagePath="/" />
   </ItemGroup>
+  <!-- GitHub resolves relative images for private repositories; NuGet requires an absolute image URL. -->
+  <Target Name="PrepareNuGetReadme" BeforeTargets="_GetPackageFiles">
+    <PropertyGroup>
+      <_NuGetReadmePath>$(IntermediateOutputPath)package/README.md</_NuGetReadmePath>
+      <_NuGetReadmeText>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../../README.md').Replace('](assets/teeforge-icon.png)', '](https://raw.githubusercontent.com/DouglasCleghorn/TeeForge/main/assets/teeforge-icon.png)'))</_NuGetReadmeText>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(_NuGetReadmePath)" Lines="$([MSBuild]::Escape('$(_NuGetReadmeText)'))" Overwrite="true" WriteOnlyWhenDifferent="true" Encoding="UTF-8" />
+    <ItemGroup>
+      <None Include="$(_NuGetReadmePath)" Pack="true" PackagePath="/README.md" />
+    </ItemGroup>
+  </Target>
 </Project>

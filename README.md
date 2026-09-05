@@ -1,6 +1,6 @@
 # TeeForge
 
-![TeeForge icon](https://raw.githubusercontent.com/DouglasCleghorn/TeeForge/main/assets/teeforge-icon.png)
+![TeeForge icon](assets/teeforge-icon.png)
 
 High-performance .NET 10 streams for live composition, mirrored I/O,
 write-only replication, buffered fan-out, multi-hashing, broadcast pipelines,
