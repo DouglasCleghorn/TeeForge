@@ -1,6 +1,6 @@
 # TeeForge public API reference
 
-Version 0.1.0 · **unreleased** · .NET 10.
+Version 0.1.0 · **released** · .NET 10.
 
 Generated from the analyzer-checked public API baseline. This is signature notation, not copyable C#: ! marks a non-null reference, ? marks a nullable reference, and -> introduces the return type. Use the [recipes](recipes/index.md) for runnable C# and the [specification](specification.md) for behavior.
 

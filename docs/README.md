@@ -8,8 +8,7 @@ provides [llms.txt](../llms.txt) for agents.
 
 ## Versions and release status
 
-The current API targets TeeForge 0.1.0 and .NET 10. It is marked **unreleased**
-until the package is published. `docs/versions/<package-version>/` contains the
+The current API targets TeeForge 0.1.0 and .NET 10. Its snapshot records release 0.1.0. `docs/versions/<package-version>/` contains the
 version-specific guide, examples, API signatures, and contracts. Documentation
 for an unreleased version may change; a released snapshot should be retained
 when the package advances. Never infer NuGet availability from a sample command.
