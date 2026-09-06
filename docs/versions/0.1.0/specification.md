@@ -742,7 +742,7 @@ detailed in [the multipath stream design](multipath-stream.md).
 - Package contents and runtime dependency metadata are tested.
 - BenchmarkDotNet experiments cover 4 KiB, 64 KiB, and 1 MiB payloads; curated
   results and conclusions remain in the repository under the
-  [repository-wide sampling and retention policy](https://github.com/DouglasCleghorn/TeeForge/blob/main/docs/benchmarks/README.md#repository-wide-sampling-and-retention-policy).
+  [repository-wide sampling and retention policy](https://github.com/DouglasCleghorn/TeeForge/blob/v0.1.0/docs/benchmarks/README.md#repository-wide-sampling-and-retention-policy).
 
 
 ## ErasureStream
@@ -802,7 +802,7 @@ the behavior supplied by the underlying streams.
 
 The default block size remains 128 KiB. Existing benchmark observations are
 historical evidence; changing defaults requires equivalent sampled comparisons
-under the [benchmark policy](https://github.com/DouglasCleghorn/TeeForge/blob/main/docs/benchmarks/README.md).
+under the [benchmark policy](https://github.com/DouglasCleghorn/TeeForge/blob/v0.1.0/docs/benchmarks/README.md).
 
-Run the [forward-only sample](https://github.com/DouglasCleghorn/TeeForge/blob/main/samples/TeeForge.Streaming/README.md) to encode,
+Run the [forward-only sample](https://github.com/DouglasCleghorn/TeeForge/blob/v0.1.0/samples/TeeForge.Streaming/README.md) to encode,
 reopen, and recover with two missing members.

@@ -2,9 +2,9 @@
 
 All notable changes to TeeForge are documented here.
 
-## [Unreleased]
+## [0.1.0] - 2026-09-06
 
-Initial release (0.1.0), pending publication.
+Initial public release.
 
 - Add lazily cached `Base64Url` (unpadded) and `Base32` (uppercase, padded)
   encodings to `TeeHashResult`.

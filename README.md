@@ -25,7 +25,7 @@ replicate writes, broadcast to independent readers, and read byte ranges.
 For automated reading, use [llms.txt](https://teeforge-docs.douglas-cleghorn.chatgpt.site/llms.txt).
 The NuGet package includes the usage guide at `docs/agent-guide.md` and the matching
 recipes and API reference. Check the documentation's release status against the
-installed package; 0.1.0 documentation is marked unreleased until publication.
+installed package; these documentation snapshots describe release 0.1.0.
 
 ## Install
 

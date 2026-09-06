@@ -3,7 +3,7 @@
 > .NET 10 library for copying streams to multiple destinations, multi-hashing,
 > replication, broadcast readers and pipelines, positional I/O, erasure coding, and QUIC.
 
-Current documented package version: 0.1.0 (unreleased). Match
+Current documented package version: 0.1.0 (released). Match
 documentation to the installed package. An unreleased version may not be on NuGet.
 Both .NET HashAlgorithmName and TeeHashAlgorithm inputs use one result model.
 Experimental storage and mounting tools are not part of the NuGet package.

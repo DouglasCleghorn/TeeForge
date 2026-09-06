@@ -1,6 +1,6 @@
 # TeeForge runnable C# recipes
 
-TeeForge 0.1.0 · .NET 10 · **unreleased**
+TeeForge 0.1.0 · .NET 10 · **released**
 
 - [Copy a C# stream to multiple destinations](copy.md): Select the extension with a destination collection; caller streams remain open and unflushed.
 - [Calculate multiple hashes while copying a stream](hash.md): Compute SHA-256 and XXH3 in one copy; access the SHA-256 result with either identifier form.
