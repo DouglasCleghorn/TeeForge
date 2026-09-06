@@ -1,0 +1,24 @@
+# TeeForge
+
+> .NET 10 library for copying streams to multiple destinations, multi-hashing,
+> replication, broadcast readers and pipelines, positional I/O, erasure coding, and QUIC.
+
+Current documented package version: 0.1.0 (released). Match
+documentation to the installed package. An unreleased version may not be on NuGet.
+Both .NET HashAlgorithmName and TeeHashAlgorithm inputs use one result model.
+Experimental storage and mounting tools are not part of the NuGet package.
+
+## Start here
+- [Usage guide](https://teeforge-docs.douglas-cleghorn.chatgpt.site/0.1.0/agent-guide.md): API selection, installation, ownership, completion, and pitfalls.
+- [Runnable recipes](https://teeforge-docs.douglas-cleghorn.chatgpt.site/0.1.0/recipes/index.md): Five examples compiled and executed in CI.
+- [Public API signatures](https://teeforge-docs.douglas-cleghorn.chatgpt.site/0.1.0/api-reference.md): Exact analyzer-checked signatures grouped by namespace.
+- [Documentation versions](https://teeforge-docs.douglas-cleghorn.chatgpt.site/versions.json): Available package versions and release status.
+
+## Contracts
+- [Behavioral specification](https://teeforge-docs.douglas-cleghorn.chatgpt.site/0.1.0/specification.md): Stream capabilities, concurrency, cancellation, and failures.
+- [Replication](https://teeforge-docs.douglas-cleghorn.chatgpt.site/0.1.0/replica-stream.md): Write-only fan-out and ownership.
+- [Erasure coding](https://teeforge-docs.douglas-cleghorn.chatgpt.site/0.1.0/erasure-stream.md): Headerless geometry, member ordering, and recovery.
+- [Multipath transport](https://teeforge-docs.douglas-cleghorn.chatgpt.site/0.1.0/multipath-stream.md): Framing, completion, and control messages.
+
+## Repository
+- [Source and release history](https://github.com/DouglasCleghorn/TeeForge): Repository and version tags.

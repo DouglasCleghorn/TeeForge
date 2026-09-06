@@ -1,6 +1,4 @@
 #nullable enable
-~override TeeForge.Mirroring.TeeStreamMismatch.Equals(object obj) -> bool
-~override TeeForge.Mirroring.TeeStreamMismatch.ToString() -> string
 const TeeForge.ErasureCoding.ErasureStreamOptions.DefaultBlockSize = 131072 -> int
 const TeeForge.Networking.MultipathStreamOptions.DefaultFramePayloadSize = 16384 -> int
 override TeeForge.Composition.HandoffStream.CanRead.get -> bool
@@ -75,6 +73,8 @@ override TeeForge.ErasureCoding.ErasureStream.Write(byte[]! buffer, int offset, 
 override TeeForge.ErasureCoding.ErasureStream.Write(System.ReadOnlySpan<byte> buffer) -> void
 override TeeForge.ErasureCoding.ErasureStream.WriteAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
 override TeeForge.ErasureCoding.ErasureStream.WriteAsync(System.ReadOnlyMemory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+override TeeForge.Hashing.TeeHashAlgorithmId.GetHashCode() -> int
+override TeeForge.Hashing.TeeHashAlgorithmId.ToString() -> string!
 override TeeForge.Hashing.TeeHashStream.Dispose(bool disposing) -> void
 override TeeForge.Mirroring.ReplicaStream.CanRead.get -> bool
 override TeeForge.Mirroring.ReplicaStream.CanSeek.get -> bool
@@ -248,6 +248,24 @@ override TeeForge.RandomAccess.RandomAccessMemoryStream.WriteAsync(byte[]! buffe
 override TeeForge.RandomAccess.RandomAccessMemoryStream.WriteAsync(System.ReadOnlyMemory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 override TeeForge.RandomAccess.RandomAccessMemoryStream.WriteByte(byte value) -> void
 override TeeForge.RandomAccess.RandomAccessMemoryStream.WriteTo(System.IO.Stream! stream) -> void
+static TeeForge.Broadcasting.BroadcastCopyOptions.Default.get -> TeeForge.Broadcasting.BroadcastCopyOptions!
+static TeeForge.Broadcasting.BroadcastPipeOptions.Default.get -> TeeForge.Broadcasting.BroadcastPipeOptions!
+static TeeForge.Broadcasting.BroadcastStreamOptions.Default.get -> TeeForge.Broadcasting.BroadcastStreamOptions!
+static TeeForge.Broadcasting.StreamCopyExtensions.CopyToAsync(this System.IO.Stream! source, params System.IO.Stream![]! destinations) -> System.Threading.Tasks.Task!
+static TeeForge.Broadcasting.StreamCopyExtensions.CopyToAsync(this System.IO.Stream! source, System.Collections.Generic.IEnumerable<System.IO.Stream!>! destinations, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+static TeeForge.Broadcasting.StreamCopyExtensions.CopyToAsync(this System.IO.Stream! source, System.Collections.Generic.IEnumerable<System.IO.Stream!>! destinations, TeeForge.Broadcasting.BroadcastCopyOptions! options, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+static TeeForge.Broadcasting.StreamCopyExtensions.CopyToAsync(this System.IO.Stream! source, System.Collections.Generic.IEnumerable<System.Security.Cryptography.HashAlgorithmName>! algorithms, params System.IO.Stream![]! destinations) -> System.Threading.Tasks.Task<TeeForge.Hashing.TeeHashResults!>!
+static TeeForge.Broadcasting.StreamCopyExtensions.CopyToAsync(this System.IO.Stream! source, System.Collections.Generic.IEnumerable<System.Security.Cryptography.HashAlgorithmName>! algorithms, System.Collections.Generic.IEnumerable<System.IO.Stream!>! destinations, TeeForge.Broadcasting.BroadcastCopyOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TeeForge.Hashing.TeeHashResults!>!
+static TeeForge.Broadcasting.StreamCopyExtensions.CopyToAsync(this System.IO.Stream! source, System.Collections.Generic.IEnumerable<System.Security.Cryptography.HashAlgorithmName>! algorithms, System.IO.Stream! destination, TeeForge.Broadcasting.BroadcastCopyOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TeeForge.Hashing.TeeHashResults!>!
+static TeeForge.Broadcasting.StreamCopyExtensions.CopyToAsync(this System.IO.Stream! source, System.Collections.Generic.IEnumerable<TeeForge.Hashing.TeeHashAlgorithm>! algorithms, params System.IO.Stream![]! destinations) -> System.Threading.Tasks.Task<TeeForge.Hashing.TeeHashResults!>!
+static TeeForge.Broadcasting.StreamCopyExtensions.CopyToAsync(this System.IO.Stream! source, System.Collections.Generic.IEnumerable<TeeForge.Hashing.TeeHashAlgorithm>! algorithms, System.Collections.Generic.IEnumerable<System.IO.Stream!>! destinations, TeeForge.Broadcasting.BroadcastCopyOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TeeForge.Hashing.TeeHashResults!>!
+static TeeForge.Broadcasting.StreamCopyExtensions.CopyToAsync(this System.IO.Stream! source, System.Collections.Generic.IEnumerable<TeeForge.Hashing.TeeHashAlgorithm>! algorithms, System.IO.Stream! destination, TeeForge.Broadcasting.BroadcastCopyOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TeeForge.Hashing.TeeHashResults!>!
+static TeeForge.Broadcasting.StreamCopyExtensions.CopyToAsync(this System.IO.Stream! source, System.Security.Cryptography.HashAlgorithmName algorithm, params System.IO.Stream![]! destinations) -> System.Threading.Tasks.Task<TeeForge.Hashing.TeeHashResults!>!
+static TeeForge.Broadcasting.StreamCopyExtensions.CopyToAsync(this System.IO.Stream! source, System.Security.Cryptography.HashAlgorithmName algorithm, System.Collections.Generic.IEnumerable<System.IO.Stream!>! destinations, TeeForge.Broadcasting.BroadcastCopyOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TeeForge.Hashing.TeeHashResults!>!
+static TeeForge.Broadcasting.StreamCopyExtensions.CopyToAsync(this System.IO.Stream! source, System.Security.Cryptography.HashAlgorithmName algorithm, System.IO.Stream! destination, TeeForge.Broadcasting.BroadcastCopyOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TeeForge.Hashing.TeeHashResults!>!
+static TeeForge.Broadcasting.StreamCopyExtensions.CopyToAsync(this System.IO.Stream! source, TeeForge.Hashing.TeeHashAlgorithm algorithm, params System.IO.Stream![]! destinations) -> System.Threading.Tasks.Task<TeeForge.Hashing.TeeHashResults!>!
+static TeeForge.Broadcasting.StreamCopyExtensions.CopyToAsync(this System.IO.Stream! source, TeeForge.Hashing.TeeHashAlgorithm algorithm, System.Collections.Generic.IEnumerable<System.IO.Stream!>! destinations, TeeForge.Broadcasting.BroadcastCopyOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TeeForge.Hashing.TeeHashResults!>!
+static TeeForge.Broadcasting.StreamCopyExtensions.CopyToAsync(this System.IO.Stream! source, TeeForge.Hashing.TeeHashAlgorithm algorithm, System.IO.Stream! destination, TeeForge.Broadcasting.BroadcastCopyOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TeeForge.Hashing.TeeHashResults!>!
 static TeeForge.Composition.MigratingStreamOptions.Default.get -> TeeForge.Composition.MigratingStreamOptions!
 static TeeForge.ErasureCoding.ErasureStream.Create(System.Collections.Generic.IReadOnlyList<System.IO.Stream!>! members, int dataShardCount, int parityShardCount, long logicalLength, int blockSize = 131072, TeeForge.ErasureCoding.ErasureStreamOptions? options = null) -> TeeForge.ErasureCoding.ErasureStream!
 static TeeForge.ErasureCoding.ErasureStream.Open(System.Collections.Generic.IReadOnlyList<System.IO.Stream?>! members, int dataShardCount, int parityShardCount, long logicalLength, int blockSize = 131072, TeeForge.ErasureCoding.ErasureStreamOptions? options = null) -> TeeForge.ErasureCoding.ErasureStream!
@@ -255,6 +273,10 @@ static TeeForge.ErasureCoding.ErasureStreamOptions.Default.get -> TeeForge.Erasu
 static TeeForge.Hashing.TeeHashAlgorithmAdapter.ToTeeHashAlgorithm(System.Security.Cryptography.HashAlgorithmName algorithm) -> TeeForge.Hashing.TeeHashAlgorithm
 static TeeForge.Hashing.TeeHashAlgorithmAdapter.TryToHashAlgorithmName(TeeForge.Hashing.TeeHashAlgorithm algorithm, out System.Security.Cryptography.HashAlgorithmName result) -> bool
 static TeeForge.Hashing.TeeHashAlgorithmAdapter.TryToTeeHashAlgorithm(System.Security.Cryptography.HashAlgorithmName algorithm, out TeeForge.Hashing.TeeHashAlgorithm result) -> bool
+static TeeForge.Hashing.TeeHashAlgorithmId.implicit operator TeeForge.Hashing.TeeHashAlgorithmId(System.Security.Cryptography.HashAlgorithmName algorithm) -> TeeForge.Hashing.TeeHashAlgorithmId
+static TeeForge.Hashing.TeeHashAlgorithmId.implicit operator TeeForge.Hashing.TeeHashAlgorithmId(TeeForge.Hashing.TeeHashAlgorithm algorithm) -> TeeForge.Hashing.TeeHashAlgorithmId
+static TeeForge.Hashing.TeeHashAlgorithmId.operator !=(TeeForge.Hashing.TeeHashAlgorithmId left, TeeForge.Hashing.TeeHashAlgorithmId right) -> bool
+static TeeForge.Hashing.TeeHashAlgorithmId.operator ==(TeeForge.Hashing.TeeHashAlgorithmId left, TeeForge.Hashing.TeeHashAlgorithmId right) -> bool
 static TeeForge.Mirroring.ReplicaStreamOptions.Default.get -> TeeForge.Mirroring.ReplicaStreamOptions!
 static TeeForge.Mirroring.TeeBufferedStreamOptions.Default.get -> TeeForge.Mirroring.TeeBufferedStreamOptions!
 static TeeForge.Mirroring.TeeStreamMismatch.operator !=(TeeForge.Mirroring.TeeStreamMismatch left, TeeForge.Mirroring.TeeStreamMismatch right) -> bool
@@ -263,15 +285,58 @@ static TeeForge.Mirroring.TeeStreamOptions.Default.get -> TeeForge.Mirroring.Tee
 static TeeForge.Networking.MultipathControlMessage.CreateEndpointAdvertisement(string! endpointScheme, System.ReadOnlyMemory<byte> endpointData) -> TeeForge.Networking.MultipathControlMessage!
 static TeeForge.Networking.MultipathControlMessage.CreateModeChangeRequest(TeeForge.Networking.MultipathStreamMode mode, int dataShardCount = 0, int parityShardCount = 0) -> TeeForge.Networking.MultipathControlMessage!
 static TeeForge.Networking.MultipathControlMessage.CreatePathReceivingValidFrames(System.Guid pathId) -> TeeForge.Networking.MultipathControlMessage!
-static TeeForge.Networking.MultipathControlMessage.CreateReliablePath(System.Guid pathId) -> TeeForge.Networking.MultipathControlMessage!
 static TeeForge.Networking.MutualQuicConnection.ConnectAsync(System.Net.EndPoint! remoteEndPoint, string! targetHost, TeeForge.Networking.MutualQuicConnectionOptions! options, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TeeForge.Networking.MutualQuicConnection!>
 static TeeForge.Networking.MutualQuicConnection.IsSupported.get -> bool
 static TeeForge.Networking.MutualQuicConnectionListener.IsSupported.get -> bool
 static TeeForge.Networking.MutualQuicConnectionListener.ListenAsync(System.Net.IPEndPoint! listenEndPoint, TeeForge.Networking.MutualQuicConnectionOptions! options, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TeeForge.Networking.MutualQuicConnectionListener!>
-static TeeForge.Pipelines.TeePipeOptions.Default.get -> TeeForge.Pipelines.TeePipeOptions!
 static TeeForge.RandomAccess.HttpRandomAccessStream.OpenAsync(System.Net.Http.HttpClient! client, System.Uri! requestUri, TeeForge.RandomAccess.HttpRandomAccessStreamOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TeeForge.RandomAccess.HttpRandomAccessStream!>!
 static TeeForge.RandomAccess.HttpRandomAccessStreamOptions.Default.get -> TeeForge.RandomAccess.HttpRandomAccessStreamOptions!
 static TeeForge.RandomAccess.TeeRandomAccess.TryGet(System.IO.Stream! stream, out TeeForge.RandomAccess.ITeeRandomAccessStream? randomAccess) -> bool
+TeeForge.Broadcasting.BroadcastCopyDestinationException
+TeeForge.Broadcasting.BroadcastCopyDestinationException.BroadcastCopyDestinationException(int destinationIndex, System.Exception! innerException) -> void
+TeeForge.Broadcasting.BroadcastCopyDestinationException.DestinationIndex.get -> int
+TeeForge.Broadcasting.BroadcastCopyFailureBehavior
+TeeForge.Broadcasting.BroadcastCopyFailureBehavior.Continue = 1 -> TeeForge.Broadcasting.BroadcastCopyFailureBehavior
+TeeForge.Broadcasting.BroadcastCopyFailureBehavior.Stop = 0 -> TeeForge.Broadcasting.BroadcastCopyFailureBehavior
+TeeForge.Broadcasting.BroadcastCopyOptions
+TeeForge.Broadcasting.BroadcastCopyOptions.BroadcastCopyOptions(int bufferSize = 4096, long pauseWriterThreshold = 65536, long resumeWriterThreshold = 32768, TeeForge.Broadcasting.BroadcastCopyFailureBehavior failureBehavior = TeeForge.Broadcasting.BroadcastCopyFailureBehavior.Stop) -> void
+TeeForge.Broadcasting.BroadcastCopyOptions.BufferSize.get -> int
+TeeForge.Broadcasting.BroadcastCopyOptions.FailureBehavior.get -> TeeForge.Broadcasting.BroadcastCopyFailureBehavior
+TeeForge.Broadcasting.BroadcastCopyOptions.PauseWriterThreshold.get -> long
+TeeForge.Broadcasting.BroadcastCopyOptions.ResumeWriterThreshold.get -> long
+TeeForge.Broadcasting.BroadcastPipe
+TeeForge.Broadcasting.BroadcastPipe.BroadcastPipe(int readerCount) -> void
+TeeForge.Broadcasting.BroadcastPipe.BroadcastPipe(int readerCount, TeeForge.Broadcasting.BroadcastPipeOptions! options) -> void
+TeeForge.Broadcasting.BroadcastPipe.ReaderCompletions.get -> System.Collections.Generic.IReadOnlyList<System.Threading.Tasks.Task<System.Exception?>!>!
+TeeForge.Broadcasting.BroadcastPipe.Readers.get -> System.Collections.Generic.IReadOnlyList<System.IO.Pipelines.PipeReader!>!
+TeeForge.Broadcasting.BroadcastPipe.Reset() -> void
+TeeForge.Broadcasting.BroadcastPipe.Writer.get -> System.IO.Pipelines.PipeWriter!
+TeeForge.Broadcasting.BroadcastPipeOptions
+TeeForge.Broadcasting.BroadcastPipeOptions.BroadcastPipeOptions(System.Buffers.MemoryPool<byte>? pool = null, System.IO.Pipelines.PipeScheduler? readerScheduler = null, System.IO.Pipelines.PipeScheduler? writerScheduler = null, long pauseWriterThreshold = -1, long resumeWriterThreshold = -1, int minimumSegmentSize = -1, bool useSynchronizationContext = true, TeeForge.Broadcasting.BroadcastPipeReaderFailureBehavior readerFailureBehavior = TeeForge.Broadcasting.BroadcastPipeReaderFailureBehavior.Continue) -> void
+TeeForge.Broadcasting.BroadcastPipeOptions.MinimumSegmentSize.get -> int
+TeeForge.Broadcasting.BroadcastPipeOptions.PauseWriterThreshold.get -> long
+TeeForge.Broadcasting.BroadcastPipeOptions.Pool.get -> System.Buffers.MemoryPool<byte>!
+TeeForge.Broadcasting.BroadcastPipeOptions.ReaderFailureBehavior.get -> TeeForge.Broadcasting.BroadcastPipeReaderFailureBehavior
+TeeForge.Broadcasting.BroadcastPipeOptions.ReaderScheduler.get -> System.IO.Pipelines.PipeScheduler!
+TeeForge.Broadcasting.BroadcastPipeOptions.ResumeWriterThreshold.get -> long
+TeeForge.Broadcasting.BroadcastPipeOptions.UseSynchronizationContext.get -> bool
+TeeForge.Broadcasting.BroadcastPipeOptions.WriterScheduler.get -> System.IO.Pipelines.PipeScheduler!
+TeeForge.Broadcasting.BroadcastPipeReaderFailureBehavior
+TeeForge.Broadcasting.BroadcastPipeReaderFailureBehavior.CompletePipe = 1 -> TeeForge.Broadcasting.BroadcastPipeReaderFailureBehavior
+TeeForge.Broadcasting.BroadcastPipeReaderFailureBehavior.Continue = 0 -> TeeForge.Broadcasting.BroadcastPipeReaderFailureBehavior
+TeeForge.Broadcasting.BroadcastStream
+TeeForge.Broadcasting.BroadcastStream.BroadcastStream(System.IO.Stream! source, int readerCount, TeeForge.Broadcasting.BroadcastStreamOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+TeeForge.Broadcasting.BroadcastStream.BytesBroadcast.get -> long
+TeeForge.Broadcasting.BroadcastStream.Completion.get -> System.Threading.Tasks.Task!
+TeeForge.Broadcasting.BroadcastStream.Dispose() -> void
+TeeForge.Broadcasting.BroadcastStream.Readers.get -> System.Collections.Generic.IReadOnlyList<System.IO.Stream!>!
+TeeForge.Broadcasting.BroadcastStreamOptions
+TeeForge.Broadcasting.BroadcastStreamOptions.BroadcastStreamOptions(int bufferSize = 4096, long pauseWriterThreshold = 65536, long resumeWriterThreshold = 32768, bool leaveOpen = false) -> void
+TeeForge.Broadcasting.BroadcastStreamOptions.BufferSize.get -> int
+TeeForge.Broadcasting.BroadcastStreamOptions.LeaveOpen.get -> bool
+TeeForge.Broadcasting.BroadcastStreamOptions.PauseWriterThreshold.get -> long
+TeeForge.Broadcasting.BroadcastStreamOptions.ResumeWriterThreshold.get -> long
+TeeForge.Broadcasting.StreamCopyExtensions
 TeeForge.Composition.HandoffStream
 TeeForge.Composition.HandoffStream.CanReadAt.get -> bool
 TeeForge.Composition.HandoffStream.CanWriteAt.get -> bool
@@ -319,57 +384,56 @@ TeeForge.ErasureCoding.ErasureStreamOptions.LeaveOpen.get -> bool
 TeeForge.ErasureCoding.ErasureStreamOptions.MaximumCacheBytes.get -> long
 TeeForge.ErasureCoding.ErasureStreamOptions.ReadAheadBlockCount.get -> int
 TeeForge.ErasureCoding.ErasureStreamOptions.RequireAllMembers.get -> bool
+TeeForge.Hashing.BroadcastHashStream
+TeeForge.Hashing.BroadcastHashStream.BroadcastHashStream(System.Collections.Generic.IEnumerable<System.Security.Cryptography.HashAlgorithmName>! algorithms, out TeeForge.Hashing.TeeHashResults! results, System.IO.Stream! source, int readerCount, TeeForge.Broadcasting.BroadcastStreamOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+TeeForge.Hashing.BroadcastHashStream.BroadcastHashStream(System.Collections.Generic.IEnumerable<TeeForge.Hashing.TeeHashAlgorithm>! algorithms, out TeeForge.Hashing.TeeHashResults! results, System.IO.Stream! source, int readerCount, TeeForge.Broadcasting.BroadcastStreamOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+TeeForge.Hashing.BroadcastHashStream.BroadcastHashStream(System.Security.Cryptography.HashAlgorithmName algorithm, out TeeForge.Hashing.TeeHashResults! results, System.IO.Stream! source, int readerCount, TeeForge.Broadcasting.BroadcastStreamOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+TeeForge.Hashing.BroadcastHashStream.BroadcastHashStream(TeeForge.Hashing.TeeHashAlgorithm algorithm, out TeeForge.Hashing.TeeHashResults! results, System.IO.Stream! source, int readerCount, TeeForge.Broadcasting.BroadcastStreamOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
 TeeForge.Hashing.TeeHashAlgorithm
 TeeForge.Hashing.TeeHashAlgorithm.Crc32 = 9 -> TeeForge.Hashing.TeeHashAlgorithm
 TeeForge.Hashing.TeeHashAlgorithm.Crc64 = 10 -> TeeForge.Hashing.TeeHashAlgorithm
 TeeForge.Hashing.TeeHashAlgorithm.MD5 = 1 -> TeeForge.Hashing.TeeHashAlgorithm
 TeeForge.Hashing.TeeHashAlgorithm.SHA1 = 2 -> TeeForge.Hashing.TeeHashAlgorithm
 TeeForge.Hashing.TeeHashAlgorithm.SHA256 = 3 -> TeeForge.Hashing.TeeHashAlgorithm
+TeeForge.Hashing.TeeHashAlgorithm.SHA384 = 4 -> TeeForge.Hashing.TeeHashAlgorithm
 TeeForge.Hashing.TeeHashAlgorithm.SHA3_256 = 6 -> TeeForge.Hashing.TeeHashAlgorithm
 TeeForge.Hashing.TeeHashAlgorithm.SHA3_384 = 7 -> TeeForge.Hashing.TeeHashAlgorithm
 TeeForge.Hashing.TeeHashAlgorithm.SHA3_512 = 8 -> TeeForge.Hashing.TeeHashAlgorithm
-TeeForge.Hashing.TeeHashAlgorithm.SHA384 = 4 -> TeeForge.Hashing.TeeHashAlgorithm
 TeeForge.Hashing.TeeHashAlgorithm.SHA512 = 5 -> TeeForge.Hashing.TeeHashAlgorithm
 TeeForge.Hashing.TeeHashAlgorithm.XxHash128 = 14 -> TeeForge.Hashing.TeeHashAlgorithm
 TeeForge.Hashing.TeeHashAlgorithm.XxHash3 = 13 -> TeeForge.Hashing.TeeHashAlgorithm
 TeeForge.Hashing.TeeHashAlgorithm.XxHash32 = 11 -> TeeForge.Hashing.TeeHashAlgorithm
 TeeForge.Hashing.TeeHashAlgorithm.XxHash64 = 12 -> TeeForge.Hashing.TeeHashAlgorithm
 TeeForge.Hashing.TeeHashAlgorithmAdapter
+TeeForge.Hashing.TeeHashAlgorithmId
+TeeForge.Hashing.TeeHashAlgorithmId.Equals(TeeForge.Hashing.TeeHashAlgorithmId other) -> bool
+TeeForge.Hashing.TeeHashAlgorithmId.IsCryptographic.get -> bool
+TeeForge.Hashing.TeeHashAlgorithmId.Name.get -> string!
+TeeForge.Hashing.TeeHashAlgorithmId.TeeHashAlgorithmId() -> void
+TeeForge.Hashing.TeeHashAlgorithmId.TeeHashAlgorithmId(System.Security.Cryptography.HashAlgorithmName algorithm) -> void
+TeeForge.Hashing.TeeHashAlgorithmId.TeeHashAlgorithmId(TeeForge.Hashing.TeeHashAlgorithm algorithm) -> void
 TeeForge.Hashing.TeeHashResult
-TeeForge.Hashing.TeeHashResult.Algorithm.get -> System.Security.Cryptography.HashAlgorithmName
+TeeForge.Hashing.TeeHashResult.Algorithm.get -> TeeForge.Hashing.TeeHashAlgorithmId
+TeeForge.Hashing.TeeHashResult.Base32.get -> string!
 TeeForge.Hashing.TeeHashResult.Base64.get -> string!
+TeeForge.Hashing.TeeHashResult.Base64Url.get -> string!
 TeeForge.Hashing.TeeHashResult.Bytes.get -> System.ReadOnlyMemory<byte>
 TeeForge.Hashing.TeeHashResult.Hex.get -> string!
-TeeForge.Hashing.TeeHashResult.TeeHashResult(System.Security.Cryptography.HashAlgorithmName algorithm, System.ReadOnlySpan<byte> bytes) -> void
-TeeForge.Hashing.TeeHashResult<TAlgorithm>
-TeeForge.Hashing.TeeHashResult<TAlgorithm>.Algorithm.get -> TAlgorithm
-TeeForge.Hashing.TeeHashResult<TAlgorithm>.Base64.get -> string!
-TeeForge.Hashing.TeeHashResult<TAlgorithm>.Bytes.get -> System.ReadOnlyMemory<byte>
-TeeForge.Hashing.TeeHashResult<TAlgorithm>.Hex.get -> string!
-TeeForge.Hashing.TeeHashResult<TAlgorithm>.TeeHashResult(TAlgorithm algorithm, System.ReadOnlySpan<byte> bytes) -> void
+TeeForge.Hashing.TeeHashResult.TeeHashResult(TeeForge.Hashing.TeeHashAlgorithmId algorithm, System.ReadOnlySpan<byte> bytes) -> void
 TeeForge.Hashing.TeeHashResults
-TeeForge.Hashing.TeeHashResults.ContainsKey(System.Security.Cryptography.HashAlgorithmName key) -> bool
+TeeForge.Hashing.TeeHashResults.ContainsKey(TeeForge.Hashing.TeeHashAlgorithmId key) -> bool
 TeeForge.Hashing.TeeHashResults.Count.get -> int
-TeeForge.Hashing.TeeHashResults.GetEnumerator() -> System.Collections.Generic.IEnumerator<System.Collections.Generic.KeyValuePair<System.Security.Cryptography.HashAlgorithmName, TeeForge.Hashing.TeeHashResult!>>!
+TeeForge.Hashing.TeeHashResults.GetEnumerator() -> System.Collections.Generic.IEnumerator<System.Collections.Generic.KeyValuePair<TeeForge.Hashing.TeeHashAlgorithmId, TeeForge.Hashing.TeeHashResult!>>!
 TeeForge.Hashing.TeeHashResults.IsComplete.get -> bool
-TeeForge.Hashing.TeeHashResults.Keys.get -> System.Collections.Generic.IEnumerable<System.Security.Cryptography.HashAlgorithmName>!
-TeeForge.Hashing.TeeHashResults.this[System.Security.Cryptography.HashAlgorithmName key].get -> TeeForge.Hashing.TeeHashResult!
-TeeForge.Hashing.TeeHashResults.TryGetValue(System.Security.Cryptography.HashAlgorithmName key, out TeeForge.Hashing.TeeHashResult! value) -> bool
+TeeForge.Hashing.TeeHashResults.Keys.get -> System.Collections.Generic.IEnumerable<TeeForge.Hashing.TeeHashAlgorithmId>!
+TeeForge.Hashing.TeeHashResults.this[TeeForge.Hashing.TeeHashAlgorithmId key].get -> TeeForge.Hashing.TeeHashResult!
+TeeForge.Hashing.TeeHashResults.TryGetValue(TeeForge.Hashing.TeeHashAlgorithmId key, out TeeForge.Hashing.TeeHashResult! value) -> bool
 TeeForge.Hashing.TeeHashResults.Values.get -> System.Collections.Generic.IEnumerable<TeeForge.Hashing.TeeHashResult!>!
-TeeForge.Hashing.TeeHashResults<TAlgorithm>
-TeeForge.Hashing.TeeHashResults<TAlgorithm>.ContainsKey(TAlgorithm key) -> bool
-TeeForge.Hashing.TeeHashResults<TAlgorithm>.Count.get -> int
-TeeForge.Hashing.TeeHashResults<TAlgorithm>.GetEnumerator() -> System.Collections.Generic.IEnumerator<System.Collections.Generic.KeyValuePair<TAlgorithm, TeeForge.Hashing.TeeHashResult<TAlgorithm>!>>!
-TeeForge.Hashing.TeeHashResults<TAlgorithm>.IsComplete.get -> bool
-TeeForge.Hashing.TeeHashResults<TAlgorithm>.Keys.get -> System.Collections.Generic.IEnumerable<TAlgorithm>!
-TeeForge.Hashing.TeeHashResults<TAlgorithm>.this[TAlgorithm key].get -> TeeForge.Hashing.TeeHashResult<TAlgorithm>!
-TeeForge.Hashing.TeeHashResults<TAlgorithm>.TryGetValue(TAlgorithm key, out TeeForge.Hashing.TeeHashResult<TAlgorithm>! value) -> bool
-TeeForge.Hashing.TeeHashResults<TAlgorithm>.Values.get -> System.Collections.Generic.IEnumerable<TeeForge.Hashing.TeeHashResult<TAlgorithm>!>!
 TeeForge.Hashing.TeeHashStream
 TeeForge.Hashing.TeeHashStream.TeeHashStream(System.Collections.Generic.IEnumerable<System.Security.Cryptography.HashAlgorithmName>! algorithms, out TeeForge.Hashing.TeeHashResults! results, System.Collections.Generic.IEnumerable<System.IO.Stream!>! destinations, TeeForge.Mirroring.TeeBufferedStreamOptions? options = null) -> void
-TeeForge.Hashing.TeeHashStream.TeeHashStream(System.Collections.Generic.IEnumerable<TeeForge.Hashing.TeeHashAlgorithm>! algorithms, out TeeForge.Hashing.TeeHashResults<TeeForge.Hashing.TeeHashAlgorithm>! results, System.Collections.Generic.IEnumerable<System.IO.Stream!>! destinations, TeeForge.Mirroring.TeeBufferedStreamOptions? options = null) -> void
+TeeForge.Hashing.TeeHashStream.TeeHashStream(System.Collections.Generic.IEnumerable<TeeForge.Hashing.TeeHashAlgorithm>! algorithms, out TeeForge.Hashing.TeeHashResults! results, System.Collections.Generic.IEnumerable<System.IO.Stream!>! destinations, TeeForge.Mirroring.TeeBufferedStreamOptions? options = null) -> void
 TeeForge.Hashing.TeeHashStream.TeeHashStream(System.Security.Cryptography.HashAlgorithmName algorithm, out TeeForge.Hashing.TeeHashResults! results, params System.IO.Stream![]! destinations) -> void
-TeeForge.Hashing.TeeHashStream.TeeHashStream(TeeForge.Hashing.TeeHashAlgorithm algorithm, out TeeForge.Hashing.TeeHashResults<TeeForge.Hashing.TeeHashAlgorithm>! results, params System.IO.Stream![]! destinations) -> void
+TeeForge.Hashing.TeeHashStream.TeeHashStream(TeeForge.Hashing.TeeHashAlgorithm algorithm, out TeeForge.Hashing.TeeHashResults! results, params System.IO.Stream![]! destinations) -> void
 TeeForge.Mirroring.ReplicaStream
 TeeForge.Mirroring.ReplicaStream.ReplicaStream(params System.IO.Stream![]! replicas) -> void
 TeeForge.Mirroring.ReplicaStream.ReplicaStream(System.Collections.Generic.IEnumerable<System.IO.Stream!>! replicas, TeeForge.Mirroring.ReplicaStreamOptions? options = null) -> void
@@ -443,21 +507,14 @@ TeeForge.Networking.MultipathControlChannel.MultipathControlChannel(System.IO.St
 TeeForge.Networking.MultipathControlChannel.ReceiveAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TeeForge.Networking.MultipathControlMessage?>
 TeeForge.Networking.MultipathControlChannel.SendAsync(TeeForge.Networking.MultipathControlMessage! message, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 TeeForge.Networking.MultipathControlMessage
-TeeForge.Networking.MultipathControlMessage.DataShardCount.get -> int
-TeeForge.Networking.MultipathControlMessage.EndpointData.get -> System.ReadOnlyMemory<byte>
-TeeForge.Networking.MultipathControlMessage.EndpointScheme.get -> string?
 TeeForge.Networking.MultipathControlMessage.GetEndpointAdvertisement() -> TeeForge.Networking.MultipathEndpointAdvertisement!
 TeeForge.Networking.MultipathControlMessage.GetModeChangeRequest() -> TeeForge.Networking.MultipathModeChangeRequest!
 TeeForge.Networking.MultipathControlMessage.GetPathReceivingValidFrames() -> System.Guid
 TeeForge.Networking.MultipathControlMessage.Kind.get -> TeeForge.Networking.MultipathControlMessageKind
-TeeForge.Networking.MultipathControlMessage.Mode.get -> TeeForge.Networking.MultipathStreamMode
-TeeForge.Networking.MultipathControlMessage.ParityShardCount.get -> int
-TeeForge.Networking.MultipathControlMessage.PathId.get -> System.Guid
 TeeForge.Networking.MultipathControlMessageKind
 TeeForge.Networking.MultipathControlMessageKind.EndpointAdvertisement = 2 -> TeeForge.Networking.MultipathControlMessageKind
 TeeForge.Networking.MultipathControlMessageKind.ModeChangeRequest = 1 -> TeeForge.Networking.MultipathControlMessageKind
 TeeForge.Networking.MultipathControlMessageKind.PathReceivingValidFrames = 0 -> TeeForge.Networking.MultipathControlMessageKind
-TeeForge.Networking.MultipathControlMessageKind.ReliablePath = 0 -> TeeForge.Networking.MultipathControlMessageKind
 TeeForge.Networking.MultipathEndpointAdvertisement
 TeeForge.Networking.MultipathEndpointAdvertisement.Data.get -> System.ReadOnlyMemory<byte>
 TeeForge.Networking.MultipathEndpointAdvertisement.Scheme.get -> string!
@@ -596,26 +653,6 @@ TeeForge.Networking.QuicStreamCompressionAlgorithms.All = TeeForge.Networking.Qu
 TeeForge.Networking.QuicStreamCompressionAlgorithms.BrotliFastest = 2 -> TeeForge.Networking.QuicStreamCompressionAlgorithms
 TeeForge.Networking.QuicStreamCompressionAlgorithms.BrotliOptimal = 4 -> TeeForge.Networking.QuicStreamCompressionAlgorithms
 TeeForge.Networking.QuicStreamCompressionAlgorithms.Uncompressed = 1 -> TeeForge.Networking.QuicStreamCompressionAlgorithms
-TeeForge.Pipelines.TeePipe
-TeeForge.Pipelines.TeePipe.ReaderCompletions.get -> System.Collections.Generic.IReadOnlyList<System.Threading.Tasks.Task<System.Exception?>!>!
-TeeForge.Pipelines.TeePipe.Readers.get -> System.Collections.Generic.IReadOnlyList<System.IO.Pipelines.PipeReader!>!
-TeeForge.Pipelines.TeePipe.Reset() -> void
-TeeForge.Pipelines.TeePipe.TeePipe(int readerCount, TeeForge.Pipelines.TeePipeOptions! options) -> void
-TeeForge.Pipelines.TeePipe.TeePipe(int readerCount) -> void
-TeeForge.Pipelines.TeePipe.Writer.get -> System.IO.Pipelines.PipeWriter!
-TeeForge.Pipelines.TeePipeOptions
-TeeForge.Pipelines.TeePipeOptions.MinimumSegmentSize.get -> int
-TeeForge.Pipelines.TeePipeOptions.PauseWriterThreshold.get -> long
-TeeForge.Pipelines.TeePipeOptions.Pool.get -> System.Buffers.MemoryPool<byte>!
-TeeForge.Pipelines.TeePipeOptions.ReaderFailureBehavior.get -> TeeForge.Pipelines.TeePipeReaderFailureBehavior
-TeeForge.Pipelines.TeePipeOptions.ReaderScheduler.get -> System.IO.Pipelines.PipeScheduler!
-TeeForge.Pipelines.TeePipeOptions.ResumeWriterThreshold.get -> long
-TeeForge.Pipelines.TeePipeOptions.TeePipeOptions(System.Buffers.MemoryPool<byte>? pool = null, System.IO.Pipelines.PipeScheduler? readerScheduler = null, System.IO.Pipelines.PipeScheduler? writerScheduler = null, long pauseWriterThreshold = -1, long resumeWriterThreshold = -1, int minimumSegmentSize = -1, bool useSynchronizationContext = true, TeeForge.Pipelines.TeePipeReaderFailureBehavior readerFailureBehavior = TeeForge.Pipelines.TeePipeReaderFailureBehavior.Continue) -> void
-TeeForge.Pipelines.TeePipeOptions.UseSynchronizationContext.get -> bool
-TeeForge.Pipelines.TeePipeOptions.WriterScheduler.get -> System.IO.Pipelines.PipeScheduler!
-TeeForge.Pipelines.TeePipeReaderFailureBehavior
-TeeForge.Pipelines.TeePipeReaderFailureBehavior.CompletePipe = 1 -> TeeForge.Pipelines.TeePipeReaderFailureBehavior
-TeeForge.Pipelines.TeePipeReaderFailureBehavior.Continue = 0 -> TeeForge.Pipelines.TeePipeReaderFailureBehavior
 TeeForge.RandomAccess.HttpRandomAccessStream
 TeeForge.RandomAccess.HttpRandomAccessStream.CanReadAt.get -> bool
 TeeForge.RandomAccess.HttpRandomAccessStream.CanWriteAt.get -> bool
@@ -635,8 +672,8 @@ TeeForge.RandomAccess.HttpRandomAccessStreamOptions.RetryBaseDelay.get -> System
 TeeForge.RandomAccess.HttpRandomAccessStreamOptions.SlowdownRetryCount.get -> int
 TeeForge.RandomAccess.HttpRandomAccessStreamOptions.ValidationMode.get -> TeeForge.RandomAccess.HttpRepresentationValidationMode
 TeeForge.RandomAccess.HttpRepresentationChangedException
-TeeForge.RandomAccess.HttpRepresentationChangedException.HttpRepresentationChangedException(string! message, System.Exception! innerException) -> void
 TeeForge.RandomAccess.HttpRepresentationChangedException.HttpRepresentationChangedException(string! message) -> void
+TeeForge.RandomAccess.HttpRepresentationChangedException.HttpRepresentationChangedException(string! message, System.Exception! innerException) -> void
 TeeForge.RandomAccess.HttpRepresentationValidationMode
 TeeForge.RandomAccess.HttpRepresentationValidationMode.None = 2 -> TeeForge.RandomAccess.HttpRepresentationValidationMode
 TeeForge.RandomAccess.HttpRepresentationValidationMode.RequireStrongValidator = 1 -> TeeForge.RandomAccess.HttpRepresentationValidationMode
@@ -655,14 +692,19 @@ TeeForge.RandomAccess.RandomAccessMemoryStream.CanReadAt.get -> bool
 TeeForge.RandomAccess.RandomAccessMemoryStream.CanWriteAt.get -> bool
 TeeForge.RandomAccess.RandomAccessMemoryStream.OpenReadRangeAsync(long offset, long length, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.IO.Stream!>
 TeeForge.RandomAccess.RandomAccessMemoryStream.RandomAccessMemoryStream() -> void
-TeeForge.RandomAccess.RandomAccessMemoryStream.RandomAccessMemoryStream(byte[]! buffer, bool writable) -> void
-TeeForge.RandomAccess.RandomAccessMemoryStream.RandomAccessMemoryStream(byte[]! buffer, int index, int count, bool writable, bool publiclyVisible) -> void
-TeeForge.RandomAccess.RandomAccessMemoryStream.RandomAccessMemoryStream(byte[]! buffer, int index, int count, bool writable) -> void
-TeeForge.RandomAccess.RandomAccessMemoryStream.RandomAccessMemoryStream(byte[]! buffer, int index, int count) -> void
 TeeForge.RandomAccess.RandomAccessMemoryStream.RandomAccessMemoryStream(byte[]! buffer) -> void
+TeeForge.RandomAccess.RandomAccessMemoryStream.RandomAccessMemoryStream(byte[]! buffer, bool writable) -> void
+TeeForge.RandomAccess.RandomAccessMemoryStream.RandomAccessMemoryStream(byte[]! buffer, int index, int count) -> void
+TeeForge.RandomAccess.RandomAccessMemoryStream.RandomAccessMemoryStream(byte[]! buffer, int index, int count, bool writable) -> void
+TeeForge.RandomAccess.RandomAccessMemoryStream.RandomAccessMemoryStream(byte[]! buffer, int index, int count, bool writable, bool publiclyVisible) -> void
 TeeForge.RandomAccess.RandomAccessMemoryStream.RandomAccessMemoryStream(int capacity) -> void
 TeeForge.RandomAccess.RandomAccessMemoryStream.ReadAt(System.Span<byte> buffer, long offset) -> int
 TeeForge.RandomAccess.RandomAccessMemoryStream.ReadAtAsync(System.Memory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
 TeeForge.RandomAccess.RandomAccessMemoryStream.WriteAt(System.ReadOnlySpan<byte> buffer, long offset) -> void
 TeeForge.RandomAccess.RandomAccessMemoryStream.WriteAtAsync(System.ReadOnlyMemory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 TeeForge.RandomAccess.TeeRandomAccess
+virtual TeeForge.Broadcasting.BroadcastStream.Dispose(bool disposing) -> void
+virtual TeeForge.Broadcasting.BroadcastStream.DisposeAsync() -> System.Threading.Tasks.ValueTask
+~override TeeForge.Hashing.TeeHashAlgorithmId.Equals(object obj) -> bool
+~override TeeForge.Mirroring.TeeStreamMismatch.Equals(object obj) -> bool
+~override TeeForge.Mirroring.TeeStreamMismatch.ToString() -> string

@@ -3,7 +3,7 @@ param(
     [string] $PackageDirectory = "artifacts/package",
 
     [Parameter(Mandatory = $false)]
-    [string] $ExpectedVersion = "0.1.0-rc.1"
+    [string] $ExpectedVersion = "0.1.0"
 )
 
 $ErrorActionPreference = "Stop"
@@ -32,6 +32,15 @@ try {
         "teeforge-icon.png",
         "README.md",
         "CHANGELOG.md",
+        "llms.txt",
+        "docs/agent-guide.md",
+        "docs/api-reference.md",
+        "docs/version.json",
+        "docs/recipes/copy.md",
+        "docs/recipes/hash.md",
+        "docs/recipes/replicate.md",
+        "docs/recipes/broadcast.md",
+        "docs/recipes/random-access.md",
         "LICENSE",
         "THIRD-PARTY-NOTICES.txt"
     )

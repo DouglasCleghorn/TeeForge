@@ -11,20 +11,34 @@ for sending one byte sequence to multiple destinations, checking that mirrored
 sources agree, and addressing large local or remote data without coordinating
 through a shared `Position`.
 
-> TeeForge 0.1.0-rc.1 is a prerelease. The public API may change in subsequent 0.x releases.
+> TeeForge 0.1 is an initial release. The public API may change in subsequent 0.x releases.
+
+## Documentation for developers and AI agents
+
+Start with the [usage guide](https://teeforge-docs.douglas-cleghorn.chatgpt.site/0.1.0/agent-guide.html)
+to choose an API and understand ownership, completion, concurrency, and failures.
+The [documentation site](https://teeforge-docs.douglas-cleghorn.chatgpt.site/) includes
+versioned HTML and Markdown, searchable API signatures, and five compiled C# recipes:
+copy a stream to multiple destinations, calculate multiple hashes while copying,
+replicate writes, broadcast to independent readers, and read byte ranges.
+
+For automated reading, use [llms.txt](https://teeforge-docs.douglas-cleghorn.chatgpt.site/llms.txt).
+The NuGet package includes the usage guide at `docs/agent-guide.md` and the matching
+recipes and API reference. Check the documentation's release status against the
+installed package; these documentation snapshots describe release 0.1.0.
 
 ## Install
 
 TeeForge targets .NET 10.
 
 ```text
-dotnet add package TeeForge --version 0.1.0-rc.1
+dotnet add package TeeForge --version 0.1.0
 ```
 
 With NuGet Central Package Management:
 
 ```xml
-<PackageVersion Include="TeeForge" Version="0.1.0-rc.1" />
+<PackageVersion Include="TeeForge" Version="0.1.0" />
 ```
 
 ## What is included
@@ -37,8 +51,11 @@ With NuGet Central Package Management:
 | `TeeForge.Mirroring.ReplicaStream` | Replicating a forward-only write sequence to multiple writable destinations |
 | `TeeForge.Mirroring.TeeBufferedStream` | Coalescing logical I/O once before mirrored fan-out |
 | `TeeForge.Hashing.TeeHashStream` | Writing to destinations while calculating one or more cryptographic hashes or fast checksums |
+| `TeeForge.Broadcasting.BroadcastStream` | Broadcasting one readable source through a shared buffer to independent reader streams |
+| `TeeForge.Hashing.BroadcastHashStream` | Broadcasting a readable source while calculating one set of hashes for the complete broadcast |
+| `TeeForge.Broadcasting.StreamCopyExtensions.CopyToAsync` | Copying one source to multiple destinations with independent buffered progress |
 | `TeeForge.ErasureCoding.ErasureStream` | Encoding and decoding a fixed-length sequence across headerless data/parity streams |
-| `TeeForge.Pipelines.TeePipe` | Broadcasting one writer's complete byte sequence to a fixed set of independent readers |
+| `TeeForge.Broadcasting.BroadcastPipe` | Broadcasting one writer's complete byte sequence to a fixed set of independent readers |
 | `TeeForge.RandomAccess.ITeeRandomAccessStream` | Reading or writing at explicit offsets without changing `Position` |
 | `TeeForge.RandomAccess.ITeeRangeReadSource` | Opening independent, bounded streams over logical ranges |
 | `TeeForge.RandomAccess.RandomAccessMemoryStream` | Thread-safe positional I/O over an in-memory byte sequence |
@@ -215,7 +232,7 @@ using TeeForge.Hashing;
 byte[] payload = [1, 2, 3, 4];
 await using var destination = new MemoryStream();
 
-TeeHashResults<TeeHashAlgorithm> hashes;
+TeeHashResults hashes;
 await using (var stream = new TeeHashStream(
     [TeeHashAlgorithm.SHA256, TeeHashAlgorithm.XxHash3],
     out hashes,
@@ -228,24 +245,152 @@ string sha256 = hashes[TeeHashAlgorithm.SHA256].Hex;
 string xxHash3 = hashes[TeeHashAlgorithm.XxHash3].Hex;
 ```
 
-`TeeHashAlgorithm` supports SHA, MD5, CRC, and XXHash families. The original
-cryptographic-only `HashAlgorithmName` API remains available, and
-`TeeHashAlgorithmAdapter` converts standard cryptographic identifiers between
-the two APIs.
+`TeeHashAlgorithm` supports SHA, MD5, CRC, and XXHash families. The
+cryptographic-only `HashAlgorithmName` overloads simplify porting code that
+already uses .NET algorithm names. `TeeHashAlgorithmAdapter` converts standard
+cryptographic identifiers between the two input forms.
+
+Both forms return the same `TeeHashResults` collection. Its `TeeHashAlgorithmId`
+keys accept either input type implicitly, so `hashes[HashAlgorithmName.SHA256]`
+and `hashes[TeeHashAlgorithm.SHA256]` retrieve the same result. Each result's
+`Algorithm` exposes `Name` and `IsCryptographic`. Custom .NET names remain
+available when the runtime supports them.
 
 Hashes describe the bytes observed by their internal destinations. A buffered
 retry after a partial mirrored failure is therefore hashed again.
 
+## Copy to destinations asynchronously, optionally returning hashes
+
+Import `TeeForge.Broadcasting` to use `await source.CopyToAsync(first, second)`.
+The extension reads the source once from its current position, while destinations
+advance independently through shared buffering. It leaves every caller-owned
+stream open and does not flush destinations. No multi-destination synchronous
+`CopyTo` extension is provided.
+
+Use a collection to supply cancellation and explicit options:
+
+```csharp
+using TeeForge.Broadcasting;
+
+var options = new BroadcastCopyOptions(
+    bufferSize: 4096,
+    pauseWriterThreshold: 65536,
+    resumeWriterThreshold: 32768,
+    failureBehavior: BroadcastCopyFailureBehavior.Continue);
+
+try
+{
+    await source.CopyToAsync([first, second], options, cancellationToken);
+}
+catch (AggregateException exception)
+{
+    foreach (var failure in exception.InnerExceptions.OfType<BroadcastCopyDestinationException>())
+    {
+        Console.WriteLine($"Destination {failure.DestinationIndex}: {failure.InnerException!.Message}");
+    }
+}
+```
+
+The default failure policy is `Stop`: a failed destination cancels the pump and
+other copies. `Continue` removes failed destinations from buffer retention, lets
+healthy destinations finish, then throws the collected failures. Destination
+failures appear in input order and identify their zero-based collection indexes;
+source failures appear once in the aggregate. Caller cancellation always stops
+the entire operation and cancels the returned task when no other failures need
+reporting. Already-written data is not rolled back.
+
+Pass an algorithm or algorithm list first to return hashes while copying to one
+or many destinations:
+
+```csharp
+using TeeForge.Broadcasting;
+using TeeForge.Hashing;
+
+var hash = await source.CopyToAsync(TeeHashAlgorithm.SHA256, destination);
+Console.WriteLine(hash[TeeHashAlgorithm.SHA256].Hex);
+
+// With a separate source, calculate multiple hashes while broadcasting.
+var hashes = await otherSource.CopyToAsync(
+    [TeeHashAlgorithm.SHA256, TeeHashAlgorithm.XxHash3],
+    [first, second], options, cancellationToken);
+```
+
+These overloads also accept `HashAlgorithmName` or a collection of those names.
+They use `BroadcastHashStream` to hash each source byte once and return one set of
+hashes after source EOF and all destination copies succeed. Failed or canceled
+copies do not return hashes, including failures reported after `Continue` finishes
+healthy destinations. Buffering, stream ownership, and failure options are the
+same as for ordinary broadcast copies.
+
+Writes use shared buffer memory directly, keeping segments alive until the
+destination's awaited write finishes. A stalled destination eventually pauses the
+source pump. Completion awaits every started operation, including writes that
+ignore cancellation, before releasing their memory. The destination collection
+is snapshotted and validated before source I/O: it must be nonempty, writable,
+free of duplicate stream references, and must not contain the source itself.
+
+## Broadcast a readable stream and hash it once
+
+`BroadcastStream` owns a fixed list of read-only, forward-only `Readers`. A source
+pump starts at construction and reads from the source's current position into
+shared pooled segments. Each reader has its own cursor and may read at a different
+pace. Segments remain alive until every active reader has consumed them.
+
+`BroadcastHashStream` adds one set of hashes for the entire broadcast. Bytes are
+hashed once as they enter the shared buffer, regardless of the number of readers
+or their positions. Results publish at source EOF, before `Completion` succeeds;
+they remain incomplete if the source fails, cancellation occurs, or every reader
+is disposed before EOF.
+
+```csharp
+using TeeForge.Broadcasting;
+using TeeForge.Hashing;
+
+await using var source = File.OpenRead("input.bin");
+await using var firstCopy = File.Create("first.bin");
+await using var secondCopy = File.Create("second.bin");
+await using var broadcast = new BroadcastHashStream(
+    [TeeHashAlgorithm.SHA256, TeeHashAlgorithm.XxHash3],
+    out TeeHashResults hashes,
+    source,
+    readerCount: 2,
+    new BroadcastStreamOptions(leaveOpen: true));
+
+await Task.WhenAll(
+    broadcast.Readers[0].CopyToAsync(firstCopy),
+    broadcast.Readers[1].CopyToAsync(secondCopy));
+await broadcast.Completion;
+string sha256 = hashes[TeeHashAlgorithm.SHA256].Hex;
+```
+
+Run consumers concurrently: a stalled reader eventually pauses the pump. Dispose
+an unused reader to remove it from backpressure. `Position` reports that reader's
+consumed byte count from zero; seeking is unsupported. Canceling a single read
+does not remove its reader or cancel the broadcast. Each endpoint permits one
+active read at a time.
+
+Options default to 4 KiB source reads, a 64 KiB pause threshold, and a 32 KiB resume
+threshold. The slowest reader's unread bytes govern backpressure. The pause
+threshold can be exceeded by less than one source-read buffer; pooled allocation
+sizes and segment rounding also contribute to physical memory use.
+
+Source failures are exposed by `Completion` and by each reader after it drains
+already-published data. Disposing the broadcast stops the pump, closes all reader
+endpoints, and disposes the source unless `LeaveOpen` is true. Disposal does not
+drain unread source data and reports cleanup failures separately from the pump's
+`Completion` task. A source that ignores cancellation can delay disposal until its
+active read finishes. Do not access the source directly while the pump is active.
+
 ## Broadcast through pipelines
 
-`TeePipe` broadcasts every flushed byte to a fixed set of independent readers
+`BroadcastPipe` broadcasts every flushed byte to a fixed set of independent readers
 while retaining one pooled payload copy.
 
 ```csharp
 using System.IO.Pipelines;
-using TeeForge.Pipelines;
+using TeeForge.Broadcasting;
 
-var pipe = new TeePipe(readerCount: 3);
+var pipe = new BroadcastPipe(readerCount: 3);
 byte[] payload = [1, 2, 3, 4];
 
 await pipe.Writer.WriteAsync(payload);
@@ -447,7 +592,7 @@ dotnet pack src/TeeForge/TeeForge.csproj -c Release --no-build --no-restore
 
 TeeForge is available under the
 [MIT License](https://github.com/DouglasCleghorn/TeeForge/blob/main/LICENSE).
-`TeePipe` and `TeeBufferedStream` are adapted from MIT-licensed .NET runtime
+`BroadcastPipe` and `TeeBufferedStream` are adapted from MIT-licensed .NET runtime
 implementations. The sole runtime NuGet dependency, `System.IO.Hashing`, is
 also MIT licensed. Exact sources and versions are recorded in
 [THIRD-PARTY-NOTICES.txt](https://github.com/DouglasCleghorn/TeeForge/blob/main/THIRD-PARTY-NOTICES.txt).

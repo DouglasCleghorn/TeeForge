@@ -5,16 +5,16 @@
     <RootNamespace>TeeForge</RootNamespace>
     <PackageId>TeeForge</PackageId>
     <Title>TeeForge</Title>
-    <Version>0.1.0-rc.1</Version>
+    <Version>0.1.0</Version>
     <Authors>Doug Cleghorn</Authors>
     <Copyright>Copyright Â© 2026 Doug Cleghorn</Copyright>
     <Description>High-performance .NET streams for mirrored I/O, write-only replication, buffered fan-out, multi-hashing, broadcast pipelines, headerless erasure coding, HTTP range reads, and mutually authenticated QUIC.</Description>
-    <PackageTags>stream;pipe;pipelines;broadcast;tee;raid;replication;io;hash;cryptography;erasure-coding;random-access;http-range;quic;mtls</PackageTags>
+    <PackageTags>dotnet;csharp;stream;stream-copy;pipe;pipelines;broadcast;tee;raid;replication;io;hash;multi-hash;checksums;cryptography;erasure-coding;random-access;http-range;quic;mtls;native-aot</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <PackageIcon>teeforge-icon.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>First release candidate: stream composition, mirrored and buffered I/O, hashing, broadcast pipelines, headerless erasure coding, HTTP ranges, mutually authenticated QUIC, and bounded multipath streaming. APIs may change during the 0.x series. See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>Initial release: stream composition, mirrored and buffered I/O, hashing, broadcast pipelines, headerless erasure coding, HTTP ranges, mutually authenticated QUIC, and bounded multipath streaming. APIs may change during the 0.x series. See CHANGELOG.md.</PackageReleaseNotes>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/DouglasCleghorn/TeeForge</RepositoryUrl>
     <PackageProjectUrl>https://github.com/DouglasCleghorn/TeeForge</PackageProjectUrl>
@@ -36,6 +36,8 @@
   <ItemGroup>
     <None Include="../../assets/teeforge-icon.png" Pack="true" PackagePath="/" />
     <None Include="../../CHANGELOG.md" Pack="true" PackagePath="/" />
+    <None Include="../../llms.txt" Pack="true" PackagePath="/" />
+    <None Include="../../docs/versions/$(Version)/**/*" Pack="true" PackagePath="docs/" />
     <None Include="../../LICENSE" Pack="true" PackagePath="/" />
     <None Include="../../THIRD-PARTY-NOTICES.txt" Pack="true" PackagePath="/" />
   </ItemGroup>

@@ -236,7 +236,7 @@ public class MultipathStreamTests
         Guid pathId = Guid.NewGuid();
         MultipathControlMessage[] messages =
         [
-            MultipathControlMessage.CreateReliablePath(pathId),
+            MultipathControlMessage.CreatePathReceivingValidFrames(pathId),
             MultipathControlMessage.CreateModeChangeRequest(MultipathStreamMode.ErasureCode, 5, 2),
             MultipathControlMessage.CreateEndpointAdvertisement("quic", "edge.example:443"u8.ToArray()),
         ];
@@ -253,13 +253,13 @@ public class MultipathStreamTests
         MultipathControlMessage endpoint = Assert.IsType<MultipathControlMessage>(
             await incoming.ReceiveAsync(cancellationToken));
 
-        Assert.Equal(MultipathControlMessageKind.ReliablePath, health.Kind);
-        Assert.Equal(pathId, health.PathId);
-        Assert.Equal(MultipathStreamMode.ErasureCode, mode.Mode);
-        Assert.Equal(5, mode.DataShardCount);
-        Assert.Equal(2, mode.ParityShardCount);
-        Assert.Equal("quic", endpoint.EndpointScheme);
-        Assert.Equal("edge.example:443"u8.ToArray(), endpoint.EndpointData.ToArray());
+        Assert.Equal(MultipathControlMessageKind.PathReceivingValidFrames, health.Kind);
+        Assert.Equal(pathId, health.GetPathReceivingValidFrames());
+        Assert.Equal(MultipathStreamMode.ErasureCode, mode.GetModeChangeRequest().Mode);
+        Assert.Equal(5, mode.GetModeChangeRequest().DataShardCount);
+        Assert.Equal(2, mode.GetModeChangeRequest().ParityShardCount);
+        Assert.Equal("quic", endpoint.GetEndpointAdvertisement().Scheme);
+        Assert.Equal("edge.example:443"u8.ToArray(), endpoint.GetEndpointAdvertisement().Data.ToArray());
     }
 
     [Fact]
@@ -484,7 +484,7 @@ public class MultipathStreamTests
         Assert.Throws<InvalidOperationException>(() => endpoint.GetPathReceivingValidFrames());
         Assert.Throws<InvalidOperationException>(() => endpoint.GetModeChangeRequest());
         Assert.Equal(MultipathControlProtocol.Encode(health),
-            MultipathControlProtocol.Encode(MultipathControlMessage.CreateReliablePath(pathId)));
+            MultipathControlProtocol.Encode(MultipathControlMessage.CreatePathReceivingValidFrames(pathId)));
     }
 
     [Fact]

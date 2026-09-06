@@ -2,7 +2,22 @@
 
 All notable changes to TeeForge are documented here.
 
-## [0.1.0-rc.1] - 2026-09-05
+## [0.1.0] - 2026-09-06
+
+Initial public release.
+
+- Add lazily cached `Base64Url` (unpadded) and `Base32` (uppercase, padded)
+  encodings to `TeeHashResult`.
+
+- Add hash-returning `CopyToAsync` overloads for one or many destinations and
+  explicit single or multiple hash algorithms, sharing the broadcast copy options.
+- Add multi-destination `Stream.CopyToAsync` extensions with shared buffering,
+  independent destination progress, stop/continue failure options, and indexed
+  aggregate failure reporting. Caller-owned streams remain open and unflushed.
+- Add buffered `BroadcastStream` with independent readable endpoints, shared
+  pooled storage, slow-reader backpressure, and explicit source ownership.
+- Add `BroadcastHashStream` to compute one ordered set of cryptographic hashes
+  and checksums for the broadcast, publishing only after successful source EOF.
 
 - Focus TeeForge on ordinary stream composition and optional positional I/O.
 - Keep ErasureStream headerless; callers supply geometry and member order.
@@ -45,17 +60,17 @@ All notable changes to TeeForge are documented here.
   `ITeeRangeReadSource`, and `TeeRandomAccess`.
 - Add `TeeStream`, a RAID-1-like stream that mirrors operations across an
   arbitrary set of destinations and checks successful results for consistency.
-- Add `TeePipe`, a fixed-reader broadcast pipeline that retains one pooled copy
-  while each active reader consumes the complete byte sequence independently.
+- Add `BroadcastPipe` in `TeeForge.Broadcasting`, a fixed-reader broadcast
+  pipeline that retains one pooled copy while each active reader consumes the
+  complete byte sequence independently.
 - Add `TeeBufferedStream`, adapted from Microsoft's .NET 10 `BufferedStream`,
   with one lazy shared buffer before mirrored `TeeStream` fan-out.
 - Add write-only `TeeHashStream` with explicit ordered algorithms, mixed
   cryptographic and non-cryptographic hashing through `TeeHashAlgorithm`, the
-  original `HashAlgorithmName` path, and atomic immutable results published
-  during disposal.
+  .NET interoperability overloads using `HashAlgorithmName`, and atomic immutable
+  results published during disposal. Both input forms share `TeeHashResults` and `TeeHashResult`,
+  with `TeeHashAlgorithmId` keys supporting lookups through either identifier.
 - Add `TeeBufferedStreamOptions`, an immutable child of `TeeStreamOptions` that
   owns the shared buffer size for `TeeBufferedStream` and `TeeHashStream`.
 - Add the MIT-licensed .NET 10 `System.IO.Hashing` package as the sole runtime
   NuGet dependency for incremental checksums and hashing.
-
-[0.1.0-rc.1]: https://github.com/DouglasCleghorn/TeeForge/releases/tag/v0.1.0-rc.1

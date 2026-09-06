@@ -1,6 +1,6 @@
 using System.Buffers;
 using System.IO.Pipelines;
-using TeeForge.Pipelines;
+using TeeForge.Broadcasting;
 
 int iterations = args.Length == 0 ? 25 : int.Parse(args[0], System.Globalization.CultureInfo.InvariantCulture);
 using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
@@ -13,9 +13,9 @@ for (int iteration = 0; iteration < iterations; iteration++)
     byte[] payload = new byte[payloadLength];
     random.NextBytes(payload);
 
-    var pipe = new TeePipe(
+    var pipe = new BroadcastPipe(
         readerCount,
-        new TeePipeOptions(
+        new BroadcastPipeOptions(
             pauseWriterThreshold: 32 * 1024,
             resumeWriterThreshold: 16 * 1024,
             minimumSegmentSize: 1024,

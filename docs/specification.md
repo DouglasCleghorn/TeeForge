@@ -5,10 +5,10 @@ Status: accepted for implementation on 2026-08-22; updated on 2026-08-24.
 ## Package
 
 - Package ID and assembly name: `TeeForge`.
-- Version: `0.1.0-rc.1` (prerelease).
+- Version: `0.1.0`.
 - Target framework: `net10.0` only.
 - Public namespaces are organized by stable feature family:
-  `TeeForge.Composition`, `TeeForge.Mirroring`, `TeeForge.Pipelines`,
+  `TeeForge.Composition`, `TeeForge.Mirroring`, `TeeForge.Broadcasting`,
   `TeeForge.Hashing`, `TeeForge.RandomAccess`, `TeeForge.Networking`,
   and `TeeForge.ErasureCoding`.
 - The root `TeeForge` namespace contains no public types. Consumers import only
@@ -302,7 +302,7 @@ capability at its member-I/O boundary when a member implements it.
 ## TeeBufferedStream
 
 `TeeBufferedStream` is adapted from Microsoft's `BufferedStream` source pinned
-to the same .NET `release/10.0` commit as `TeePipe`. `TeeBufferedStreamOptions`
+to the same .NET `release/10.0` commit as `BroadcastPipe`. `TeeBufferedStreamOptions`
 is an immutable, unsealed child of `TeeStreamOptions` that adds a positive
 `BufferSize`, defaulting to 4 KiB. Buffered sequence constructors receive that
 complete options object rather than a separate buffer-size argument.
@@ -375,17 +375,17 @@ TeeHashStream(
 
 TeeHashStream(
     TeeHashAlgorithm algorithm,
-    out TeeHashResults<TeeHashAlgorithm> results,
+    out TeeHashResults results,
     params Stream[] destinations)
 
 TeeHashStream(
     IEnumerable<TeeHashAlgorithm> algorithms,
-    out TeeHashResults<TeeHashAlgorithm> results,
+    out TeeHashResults results,
     IEnumerable<Stream> destinations,
     TeeBufferedStreamOptions? options = null)
 ```
 
-The `HashAlgorithmName` path remains cryptographic-only. `TeeHashAlgorithm`
+The `HashAlgorithmName` overloads support .NET interoperability and remain cryptographic-only. `TeeHashAlgorithm`
 contains `MD5`, `SHA1`, `SHA256`, `SHA384`, `SHA512`, `SHA3_256`, `SHA3_384`,
 `SHA3_512`, `Crc32`, `Crc64`, `XxHash32`, `XxHash64`, `XxHash3`, and
 `XxHash128`. One enum-based call may mix both families. Member documentation
@@ -398,7 +398,7 @@ identifiers between `HashAlgorithmName` and `TeeHashAlgorithm`. It exposes
 `ToTeeHashAlgorithm`, `TryToTeeHashAlgorithm`, and
 `TryToHashAlgorithmName`. Unknown names and undefined enum values fail their
 try-conversion. Non-cryptographic enum members also fail conversion to
-`HashAlgorithmName`; adapters do not extend the original constructor path with
+`HashAlgorithmName`; adapters do not extend the .NET constructor path with
 non-cryptographic names.
 
 Hashing runs inline through the ordinary TeeStream fan-out without worker
@@ -408,7 +408,7 @@ that hash destination, including bytes accepted again when a partial buffered
 failure is retried; it does not certify the final state of ordinary mirrors.
 
 `TeeHashResults` implements
-`IReadOnlyDictionary<HashAlgorithmName, TeeHashResult>`. Before completion it
+`IReadOnlyDictionary<TeeHashAlgorithmId, TeeHashResult>`. Before completion it
 has zero entries and `IsComplete` is false. `Flush` does not complete hashing.
 `Dispose` and `DisposeAsync` always finalize and dispose internal hash
 destinations, regardless of `LeaveOpen`, then atomically publish all results in
@@ -418,25 +418,159 @@ that finalized successfully. If any hash cannot finalize, the dictionary stays
 empty, `IsComplete` stays false, and disposal reports the failure.
 
 Each published `TeeHashResult` is immutable. It exposes its
-`HashAlgorithmName`, digest as `ReadOnlyMemory<byte>`, uppercase hexadecimal,
-and padded Base64. Text encodings are computed lazily and safely under
+`TeeHashAlgorithmId`, digest as `ReadOnlyMemory<byte>`, uppercase hexadecimal,
+padded Base64, unpadded URL-safe Base64 (`Base64Url`), and uppercase, padded
+RFC 4648 Base32 (`Base32`). Text encodings are computed lazily and safely under
 concurrent access.
 
-The enum path publishes the equivalent
-`TeeHashResults<TeeHashAlgorithm>`, implementing
-`IReadOnlyDictionary<TeeHashAlgorithm, TeeHashResult<TeeHashAlgorithm>>`.
-The generic result types require an enum key and retain the same immutability,
-ordering, lazy encoding, empty-until-complete, and atomic-publication behavior.
+Both input forms publish the same non-generic result types. `TeeHashAlgorithmId`
+implicitly accepts `TeeHashAlgorithm` and `HashAlgorithmName`, so indexers,
+`ContainsKey`, and `TryGetValue` accept either form. Standard cryptographic
+identifiers compare equally across both forms, including SHA-3 names. The key
+exposes `Name` and `IsCryptographic`; equality is case-sensitive and distinguishes
+cryptographic names from non-cryptographic checksums with the same text.
 
-## TeePipe
+Named .NET algorithms are passed through to `IncrementalHash`, even when the
+name is outside the enum. Runtime support is checked during construction.
+Names are not invented for checksums in the `HashAlgorithmName` API. The default
+shared identifier is unnamed and is rejected when creating a result.
+## Multi-destination CopyToAsync
+
+`TeeForge.Broadcasting.StreamCopyExtensions` provides async-only extensions:
+
+```csharp
+Task CopyToAsync(this Stream source, params Stream[] destinations)
+Task CopyToAsync(this Stream source, IEnumerable<Stream> destinations,
+    CancellationToken cancellationToken = default)
+Task CopyToAsync(this Stream source, IEnumerable<Stream> destinations,
+    BroadcastCopyOptions options, CancellationToken cancellationToken = default)
+```
+
+Single-destination Stream instance methods retain their normal overload binding.
+These extensions snapshot the destination enumeration once and validate every
+destination before source I/O. Source must be readable; destinations must be
+nonempty, writable, nonnull, unique object references, and distinct from source.
+Copying begins at the current source/destination positions. All caller-owned
+streams remain open and no implicit flush occurs, on success or failure.
+
+Each destination receives its own BroadcastStream reader and progresses
+independently through shared pooled segments. The asynchronous copy path writes
+directly from pipe memory and advances its consumed cursor after successful
+writes, retaining memory until each awaited write completes. There is no separate
+payload queue or copy buffer per destination. BroadcastCopyOptions defaults to
+BufferSize 4096, PauseWriterThreshold 65536, ResumeWriterThreshold 32768, and
+FailureBehavior Stop. Source reads and destination writes are at most BufferSize;
+source backpressure and memory overhead follow BroadcastStreamOptions.
+
+BroadcastCopyFailureBehavior.Stop cancels other copies and the pump when a
+destination write fails. Continue disposes the failed reader, releases its
+retained data, and lets healthy destinations finish. If every destination fails,
+the pump is stopped without draining the source. Both policies await all started
+operations, then throw AggregateException containing indexed destination errors.
+Each BroadcastCopyDestinationException exposes DestinationIndex (zero-based in
+the supplied collection) and retains the original InnerException. Destination
+errors are ordered by index; source errors are deduplicated by identity and
+reported once before destination errors. Published source data may be drained
+before a source error reaches destination workers.
+
+Caller cancellation stops the entire copy under either failure policy. Expected
+cancellation from stopping sibling copies does not obscure the initiating fault.
+With no other failures, caller cancellation produces a canceled Task. An
+independently canceled destination is a destination failure. In-flight I/O that
+ignores cancellation must finish before completion and memory reclamation. No
+rollback or automatic retry occurs; failures can leave unequal destination
+prefixes.
+
+### Hash-returning copies
+
+Algorithm-first `CopyToAsync` overloads accept a single algorithm or an algorithm
+sequence using either `TeeHashAlgorithm` or `HashAlgorithmName`. All return
+`Task<TeeHashResults>` with the same shared result identifiers.
+Each algorithm shape supports `params Stream[] destinations`, or a single
+`Stream destination` / `IEnumerable<Stream> destinations` followed by optional
+`BroadcastCopyOptions? options = null` and `CancellationToken cancellationToken = default`.
+At least one destination and one distinct, valid algorithm are required.
+Algorithm and destination enumerations are snapshotted once before source I/O.
+
+These overloads use BroadcastHashStream with the same destination copy engine.
+Each remaining source byte is hashed once regardless of the destination count
+or progress. Returned results are complete, preserve algorithm selection order,
+and describe the bytes read from the source's initial position through EOF.
+They exclude preexisting destination contents. The task returns hashes only
+after the source and every destination finish successfully. Failure aggregation,
+Stop/Continue behavior, cancellation, and ownership match the ordinary copy
+contract; a faulted or canceled task does not return hashes even when source EOF
+was reached. No synchronous hash-returning copy extension is provided.
+
+## BroadcastStream and BroadcastHashStream
+
+`TeeForge.Broadcasting.BroadcastStream` is an `IDisposable`/`IAsyncDisposable`
+coordinator with a stable `IReadOnlyList<Stream> Readers`, `Task Completion`, and
+`long BytesBroadcast`. It does not derive from Stream. Its constructor takes a
+readable source, positive reader count, optional `BroadcastStreamOptions`, and
+optional broadcast cancellation token. An asynchronous pump starts at construction
+and reads the source from its current position. The caller grants exclusive use
+of the source until the pump stops.
+
+The pump reads directly into shared BroadcastPipe memory. Reader endpoints independently
+consume the complete ordered sequence. Ordinary reads copy into caller-provided
+buffers; asynchronous copying writes shared memory directly to its destination.
+They support synchronous and asynchronous reads, ReadByte, and copying;
+all paths advance the endpoint cursor. Position reports bytes consumed from zero,
+while Length, seeking, positional I/O, and writes are unsupported. Concurrent reads
+on the same endpoint are rejected; different readers operate concurrently.
+Zero-length reads return zero without being interpreted as EOF.
+
+`BroadcastStreamOptions` is immutable and unsealed. Its defaults are BufferSize
+4096, PauseWriterThreshold 65536, ResumeWriterThreshold 32768, and LeaveOpen false.
+All sizes and thresholds must be positive and resume must not exceed pause.
+The slowest reader's unread bytes govern backpressure; a source read can exceed
+the pause threshold by less than BufferSize. Pool allocation rounding and retained
+segment boundaries are additional physical memory overhead. Payload segments are
+released only when every active reader has consumed them.
+
+Reader disposal cancels its pending read, waits for the read to release its buffer,
+and completes its pipe endpoint. It removes that reader from backpressure and
+retention. Losing all readers before EOF cancels the pump, including a cancellable
+in-flight source read. Cancellation of an individual read leaves the reader active
+and does not affect siblings. Consumers must run concurrently or dispose unused
+endpoints; waiting for one reader to finish before starting another can deadlock
+under backpressure.
+
+Completion succeeds only after source EOF; readers may still hold unread bytes.
+On failure or broadcast cancellation, readers can drain published bytes before
+observing the terminal exception. Disposal cancels and awaits the pump, disposes
+every reader, and disposes the source unless LeaveOpen is set. It is idempotent and
+does not read the remainder. Sources that ignore cancellation can delay disposal.
+Pump exceptions remain observable through Completion and endpoints; disposal
+reports cleanup failures and attempts cleanup of all owned resources.
+
+`TeeForge.Hashing.BroadcastHashStream` derives from BroadcastStream and adds one
+set of hashes independent of reader count and cursor positions. Its constructors
+take an explicit HashAlgorithmName, TeeHashAlgorithm, or corresponding ordered
+algorithm sequence first, then `out TeeHashResults`, source, reader count,
+options, and token.
+Algorithm validation and selection match TeeHashStream. Each source chunk is
+hashed once before admission to the broadcast. All results publish together at
+source EOF before Completion succeeds. Failure, cancellation, or abandonment
+before EOF leaves results incomplete, even after disposal. Hash state is always
+released when the pump stops; disposal never publishes a prefix as a full hash.
+
+## BroadcastPipe
+
+BroadcastPipe, BroadcastPipeOptions, and BroadcastPipeReaderFailureBehavior
+form the pipeline broadcast API. Before the first release, the current public
+surface is tracked in PublicAPI.Unshipped.txt; PublicAPI.Shipped.txt is empty
+apart from its nullable directive. Development names and removal markers are
+not release compatibility commitments.
 
 ### Construction and API
 
 The public constructors are:
 
 ```csharp
-TeePipe(int readerCount)
-TeePipe(int readerCount, TeePipeOptions options)
+BroadcastPipe(int readerCount)
+BroadcastPipe(int readerCount, BroadcastPipeOptions options)
 ```
 
 `readerCount` must be positive. The public endpoints are:
@@ -482,19 +616,19 @@ last reader completes. `CancelPendingRead` is per reader;
 completion or with the exception supplied to `Complete(exception)`. These tasks
 never fault.
 
-`TeePipeReaderFailureBehavior.Continue` is the default. A faulted reader leaves
+`BroadcastPipeReaderFailureBehavior.Continue` is the default. A faulted reader leaves
 the active set, the writer and healthy readers continue, and its exception is
 only historical completion data.
 
 With `CompletePipe`, the first concurrent reader fault becomes the pipe-wide
 terminal exception. The writer faults and rejects further writes. Healthy
 readers may drain already-flushed data and then observe the terminal exception;
-TeePipe neither discards their buffers nor completes them on their behalf. Every
+BroadcastPipe neither discards their buffers nor completes them on their behalf. Every
 reader completion task still retains its own exception.
 
 ### Options
 
-`TeePipeOptions` follows `PipeOptions` defaults:
+`BroadcastPipeOptions` follows `PipeOptions` defaults:
 
 - shared memory pool;
 - thread-pool reader and writer schedulers;
