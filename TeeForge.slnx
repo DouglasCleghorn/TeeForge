@@ -20,6 +20,7 @@
     <Project Path="tools/TeeForge.Mount/TeeForge.Mount.csproj" />
   </Folder>
   <Folder Name="/samples/">
+    <Project Path="samples/TeeForge.Quickstart/TeeForge.Quickstart.csproj" />
     <Project Path="samples/TeeForge.Streaming/TeeForge.Streaming.csproj" />
   </Folder>
 </Solution>

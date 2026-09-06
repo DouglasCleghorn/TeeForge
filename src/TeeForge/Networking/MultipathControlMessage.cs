@@ -4,8 +4,7 @@ namespace TeeForge.Networking;
 
 /// <summary>Represents one message carried by an optional reverse control channel.</summary>
 /// <remarks>
-/// Use the Get methods to obtain a payload checked against Kind. The flat properties are retained
-/// for compatibility and have default values when they do not apply to this message.
+/// Use the Get methods to obtain a payload checked against Kind.
 /// </remarks>
 public class MultipathControlMessage
 {
@@ -30,23 +29,17 @@ public class MultipathControlMessage
     /// <summary>Gets the message kind.</summary>
     public MultipathControlMessageKind Kind { get; }
 
-    /// <summary>Gets the reported path identifier for a reliable-path message.</summary>
-    public Guid PathId { get; }
+    private Guid PathId { get; }
 
-    /// <summary>Gets the requested distribution mode for a mode-change message.</summary>
-    public MultipathStreamMode Mode { get; }
+    private MultipathStreamMode Mode { get; }
 
-    /// <summary>Gets the requested data-shard count for an erasure mode change.</summary>
-    public int DataShardCount { get; }
+    private int DataShardCount { get; }
 
-    /// <summary>Gets the requested parity-shard count for an erasure mode change.</summary>
-    public int ParityShardCount { get; }
+    private int ParityShardCount { get; }
 
-    /// <summary>Gets the endpoint scheme for an endpoint-advertisement message.</summary>
-    public string? EndpointScheme { get; }
+    private string? EndpointScheme { get; }
 
-    /// <summary>Gets the opaque endpoint data for an endpoint-advertisement message.</summary>
-    public ReadOnlyMemory<byte> EndpointData { get; }
+    private ReadOnlyMemory<byte> EndpointData { get; }
 
     /// <summary>Gets the observed path identifier after checking the message kind.</summary>
     /// <exception cref="InvalidOperationException">The message does not report valid frames on a path.</exception>
@@ -71,9 +64,6 @@ public class MultipathControlMessage
         RequireKind(MultipathControlMessageKind.EndpointAdvertisement);
         return new MultipathEndpointAdvertisement(EndpointScheme!, EndpointData);
     }
-
-    /// <summary>Compatibility factory for <see cref="CreatePathReceivingValidFrames"/>.</summary>
-    public static MultipathControlMessage CreateReliablePath(Guid pathId) => CreatePathReceivingValidFrames(pathId);
 
     /// <summary>Reports observed valid frames on a path without acknowledging delivery or future reliability.</summary>
     public static MultipathControlMessage CreatePathReceivingValidFrames(Guid pathId)
@@ -149,18 +139,6 @@ public class MultipathControlMessage
             endpointScheme,
             endpointData);
     }
-
-    internal static MultipathControlMessage DecodeReliablePath(Guid pathId) =>
-        CreateReliablePath(pathId);
-
-    internal static MultipathControlMessage DecodeModeChange(
-        MultipathStreamMode mode,
-        int dataShardCount,
-        int parityShardCount) =>
-        CreateModeChangeRequest(mode, dataShardCount, parityShardCount);
-
-    internal static MultipathControlMessage DecodeEndpoint(string scheme, ReadOnlyMemory<byte> data) =>
-        CreateEndpointAdvertisement(scheme, data);
 
     private void RequireKind(MultipathControlMessageKind expected)
     {

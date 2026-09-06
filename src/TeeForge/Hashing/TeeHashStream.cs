@@ -26,7 +26,7 @@ public class TeeHashStream : TeeBufferedStream
         HashAlgorithmName algorithm,
         out TeeHashResults results,
         params Stream[] destinations)
-        : this(CreateState([algorithm], destinations, options: null), out results)
+        : this(CreateState(TeeHashAlgorithmFactory.Normalize([algorithm]), destinations, options: null), out results)
     {
     }
 
@@ -40,7 +40,7 @@ public class TeeHashStream : TeeBufferedStream
         out TeeHashResults results,
         IEnumerable<Stream> destinations,
         TeeBufferedStreamOptions? options = null)
-        : this(CreateState(algorithms, destinations, options), out results)
+        : this(CreateState(TeeHashAlgorithmFactory.Normalize(algorithms), destinations, options), out results)
     {
     }
 
@@ -50,9 +50,9 @@ public class TeeHashStream : TeeBufferedStream
     /// <param name="destinations">The writable destination streams.</param>
     public TeeHashStream(
         TeeHashAlgorithm algorithm,
-        out TeeHashResults<TeeHashAlgorithm> results,
+        out TeeHashResults results,
         params Stream[] destinations)
-        : this(CreateState([algorithm], destinations, options: null), out results)
+        : this(CreateState(TeeHashAlgorithmFactory.Normalize([algorithm]), destinations, options: null), out results)
     {
     }
 
@@ -63,10 +63,10 @@ public class TeeHashStream : TeeBufferedStream
     /// <param name="options">The buffering and tee behavior, or <see langword="null"/> for defaults.</param>
     public TeeHashStream(
         IEnumerable<TeeHashAlgorithm> algorithms,
-        out TeeHashResults<TeeHashAlgorithm> results,
+        out TeeHashResults results,
         IEnumerable<Stream> destinations,
         TeeBufferedStreamOptions? options = null)
-        : this(CreateState(algorithms, destinations, options), out results)
+        : this(CreateState(TeeHashAlgorithmFactory.Normalize(algorithms), destinations, options), out results)
     {
     }
 
@@ -74,16 +74,7 @@ public class TeeHashStream : TeeBufferedStream
         : base(state.AllDestinations, state.Options)
     {
         _hashStreams = state.HashStreams;
-        results = (TeeHashResults)state.Results;
-    }
-
-    private TeeHashStream(
-        ConstructionState state,
-        out TeeHashResults<TeeHashAlgorithm> results)
-        : base(state.AllDestinations, state.Options)
-    {
-        _hashStreams = state.HashStreams;
-        results = (TeeHashResults<TeeHashAlgorithm>)state.Results;
+        results = state.Results;
     }
 
     /// <inheritdoc/>
@@ -122,95 +113,21 @@ public class TeeHashStream : TeeBufferedStream
     }
 
     private static ConstructionState CreateState(
-        IEnumerable<HashAlgorithmName> algorithms,
+        TeeHashAlgorithmId[] algorithms,
         IEnumerable<Stream> destinations,
         TeeBufferedStreamOptions? options)
     {
-        ArgumentNullException.ThrowIfNull(algorithms);
         ArgumentNullException.ThrowIfNull(destinations);
-
-        HashAlgorithmName[] algorithmArray = algorithms.ToArray();
         Stream[] destinationArray = destinations.ToArray();
-        ValidateAlgorithms(algorithmArray, nameof(algorithms));
         ValidateDestinations(destinationArray, nameof(destinations));
 
         var results = new TeeHashResults();
-        return CreateStateCore(
-            algorithmArray,
-            destinationArray,
-            results,
-            options ?? TeeBufferedStreamOptions.Default,
-            TeeHashResult.FromOwnedBytes,
-            results.Publish,
-            static (algorithm, completion, index) => new HashWriteStream(algorithm, completion, index));
-    }
-
-    private static ConstructionState CreateState(
-        IEnumerable<TeeHashAlgorithm> algorithms,
-        IEnumerable<Stream> destinations,
-        TeeBufferedStreamOptions? options)
-    {
-        ArgumentNullException.ThrowIfNull(algorithms);
-        ArgumentNullException.ThrowIfNull(destinations);
-
-        TeeHashAlgorithm[] algorithmArray = algorithms.ToArray();
-        Stream[] destinationArray = destinations.ToArray();
-        ValidateAlgorithms(algorithmArray, nameof(algorithms));
-        ValidateDestinations(destinationArray, nameof(destinations));
-
-        var results = new TeeHashResults<TeeHashAlgorithm>();
-        return CreateStateCore(
-            algorithmArray,
-            destinationArray,
-            results,
-            options ?? TeeBufferedStreamOptions.Default,
-            TeeHashResult<TeeHashAlgorithm>.FromOwnedBytes,
-            results.Publish,
-            static (algorithm, completion, index) => new HashWriteStream(algorithm, completion, index));
-    }
-
-    private static ConstructionState CreateStateCore<TAlgorithm, TResult>(
-        TAlgorithm[] algorithmArray,
-        Stream[] destinationArray,
-        object results,
-        TeeBufferedStreamOptions options,
-        Func<TAlgorithm, byte[], TResult> resultFactory,
-        Action<IEnumerable<TResult>> publish,
-        Func<TAlgorithm, IHashCompletionCoordinator, int, HashWriteStream> hashStreamFactory)
-        where TAlgorithm : notnull
-    {
-        var completion = new HashCompletionCoordinator<TAlgorithm, TResult>(
-            algorithmArray,
-            resultFactory,
-            publish);
-        var hashStreams = new HashWriteStream[algorithmArray.Length];
-
-        try
-        {
-            for (int index = 0; index < algorithmArray.Length; index++)
-            {
-                hashStreams[index] = hashStreamFactory(algorithmArray[index], completion, index);
-            }
-        }
-        catch
-        {
-            foreach (HashWriteStream? hashStream in hashStreams)
-            {
-                hashStream?.DisposeWithoutFinalizing();
-            }
-
-            throw;
-        }
-
+        HashWriteStream[] hashStreams = HashCompletionCoordinator.CreateStreams(algorithms, results);
         Stream[] allDestinations = new Stream[destinationArray.Length + hashStreams.Length];
         destinationArray.CopyTo(allDestinations, 0);
         hashStreams.CopyTo(allDestinations, destinationArray.Length);
 
-        return new ConstructionState(
-            allDestinations,
-            hashStreams,
-            results,
-            options);
+        return new ConstructionState(allDestinations, hashStreams, results, options ?? TeeBufferedStreamOptions.Default);
     }
 
     private static void ValidateDestinations(Stream[] destinations, string parameterName)
@@ -238,54 +155,6 @@ public class TeeHashStream : TeeBufferedStream
                 throw new ArgumentException(
                     $"Destination at index {index} does not support writing.",
                     parameterName);
-            }
-        }
-    }
-
-    private static void ValidateAlgorithms(HashAlgorithmName[] algorithms, string parameterName)
-    {
-        if (algorithms.Length == 0)
-        {
-            throw new ArgumentException("At least one hash algorithm is required.", parameterName);
-        }
-
-        var names = new HashSet<HashAlgorithmName>();
-        for (int index = 0; index < algorithms.Length; index++)
-        {
-            HashAlgorithmName algorithm = algorithms[index];
-            if (string.IsNullOrWhiteSpace(algorithm.Name))
-            {
-                throw new ArgumentException($"Hash algorithm at index {index} is unnamed.", parameterName);
-            }
-
-            if (!names.Add(algorithm))
-            {
-                throw new ArgumentException($"Hash algorithm at index {index} is duplicated.", parameterName);
-            }
-        }
-    }
-
-    private static void ValidateAlgorithms(TeeHashAlgorithm[] algorithms, string parameterName)
-    {
-        if (algorithms.Length == 0)
-        {
-            throw new ArgumentException("At least one hash algorithm is required.", parameterName);
-        }
-
-        var values = new HashSet<TeeHashAlgorithm>();
-        for (int index = 0; index < algorithms.Length; index++)
-        {
-            TeeHashAlgorithm algorithm = algorithms[index];
-            if (!Enum.IsDefined(algorithm))
-            {
-                throw new ArgumentException(
-                    $"Hash algorithm at index {index} is undefined.",
-                    parameterName);
-            }
-
-            if (!values.Add(algorithm))
-            {
-                throw new ArgumentException($"Hash algorithm at index {index} is duplicated.", parameterName);
             }
         }
     }
@@ -321,7 +190,7 @@ public class TeeHashStream : TeeBufferedStream
     private sealed record ConstructionState(
         Stream[] AllDestinations,
         HashWriteStream[] HashStreams,
-        object Results,
+        TeeHashResults Results,
         TeeBufferedStreamOptions Options);
 }
 

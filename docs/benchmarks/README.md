@@ -58,9 +58,9 @@ implement equivalent warmup, sampling, and retention themselves.
 
 ## Version 0.1 targets
 
-- TeePipe stores one payload copy regardless of reader count.
-- One-reader TeePipe throughput and allocation remain within 15% of Microsoft `Pipe` for representative workloads.
-- Multi-reader TeePipe materially outperforms broadcasting through an equivalent number of independent Microsoft pipes.
+- BroadcastPipe stores one payload copy regardless of reader count.
+- One-reader BroadcastPipe throughput and allocation remain within 15% of Microsoft `Pipe` for representative workloads.
+- Multi-reader BroadcastPipe materially outperforms broadcasting through an equivalent number of independent Microsoft pipes.
 - Sequential TeeStream remains within 10% of an equivalent hand-written destination loop.
 - Concurrent modes demonstrate improved latency on suitably slow destinations.
 - TeeBufferedStream experiments retain the small-write benefit and the

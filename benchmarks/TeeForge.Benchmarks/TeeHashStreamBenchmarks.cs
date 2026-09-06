@@ -17,13 +17,13 @@ public class TeeHashStreamBenchmarks : IDisposable
     private TeeHashResults _sha256Results = null!;
     private TeeHashStream _sha256AndXxHash3 = null!;
     private ObservableSinkStream _sha256AndXxHash3Destination = null!;
-    private TeeHashResults<TeeHashAlgorithm> _sha256AndXxHash3Results = null!;
+    private TeeHashResults _sha256AndXxHash3Results = null!;
     private TeeHashStream _twoHashes = null!;
     private ObservableSinkStream _twoHashesDestination = null!;
     private TeeHashResults _twoHashResults = null!;
     private TeeHashStream _xxHash3 = null!;
     private ObservableSinkStream _xxHash3Destination = null!;
-    private TeeHashResults<TeeHashAlgorithm> _xxHash3Results = null!;
+    private TeeHashResults _xxHash3Results = null!;
 
     [Params(4 * 1024, 64 * 1024, 1024 * 1024)]
     public int PayloadSize { get; set; }
