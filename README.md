@@ -11,20 +11,20 @@ for sending one byte sequence to multiple destinations, checking that mirrored
 sources agree, and addressing large local or remote data without coordinating
 through a shared `Position`.
 
-> TeeForge 0.1 is an early release. The public API may change in subsequent 0.x releases.
+> TeeForge 0.1.0-rc.1 is a prerelease. The public API may change in subsequent 0.x releases.
 
 ## Install
 
 TeeForge targets .NET 10.
 
 ```text
-dotnet add package TeeForge --version 0.1.0
+dotnet add package TeeForge --version 0.1.0-rc.1
 ```
 
 With NuGet Central Package Management:
 
 ```xml
-<PackageVersion Include="TeeForge" Version="0.1.0" />
+<PackageVersion Include="TeeForge" Version="0.1.0-rc.1" />
 ```
 
 ## What is included
