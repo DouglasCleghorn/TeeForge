@@ -1,5 +1,5 @@
 {
   "siteUrl": "https://teeforge-docs.douglas-cleghorn.chatgpt.site",
-  "releaseStatus": "unreleased",
+  "releaseStatus": "released",
   "repositoryTopics": ["dotnet", "csharp", "streams", "stream-processing", "broadcast", "replication", "hashing", "checksums", "erasure-coding", "random-access", "quic", "native-aot"]
 }

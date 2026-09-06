@@ -1,7 +1,7 @@
 # TeeForge: C# stream composition usage guide
 
 Package: **TeeForge 0.1.0**. Target framework: **.NET 10 (`net10.0`)**.
-Documentation status: **unreleased**. Use documentation matching the installed
+Documentation status: **released**. Use documentation matching the installed
 package version; development documentation may contain APIs not yet on NuGet.
 
 TeeForge copies, replicates, broadcasts, and hashes byte sequences through ordinary

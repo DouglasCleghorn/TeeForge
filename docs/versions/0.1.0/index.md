@@ -1,6 +1,6 @@
 # TeeForge 0.1.0 documentation
 
-**unreleased** · Requires .NET 10
+**released** · Requires .NET 10
 
 Choose an API, run a complete C# example, or inspect the contracts behind it.
 

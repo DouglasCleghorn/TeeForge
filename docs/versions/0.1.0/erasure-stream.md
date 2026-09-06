@@ -55,7 +55,7 @@ the behavior supplied by the underlying streams.
 
 The default block size remains 128 KiB. Existing benchmark observations are
 historical evidence; changing defaults requires equivalent sampled comparisons
-under the [benchmark policy](https://github.com/DouglasCleghorn/TeeForge/blob/main/docs/benchmarks/README.md).
+under the [benchmark policy](https://github.com/DouglasCleghorn/TeeForge/blob/v0.1.0/docs/benchmarks/README.md).
 
-Run the [forward-only sample](https://github.com/DouglasCleghorn/TeeForge/blob/main/samples/TeeForge.Streaming/README.md) to encode,
+Run the [forward-only sample](https://github.com/DouglasCleghorn/TeeForge/blob/v0.1.0/samples/TeeForge.Streaming/README.md) to encode,
 reopen, and recover with two missing members.
