@@ -140,7 +140,7 @@ cancellation restores the original source. Destination ownership transfers to
 destination disposal. The migration options control whether the retired source
 is disposed and whether a partial destination is disposed after failure.
 
-## Quick start: replicate writes
+## Replicate writes
 
 `ReplicaStream` is a write-only, forward-only fan-out stream. Every write and
 flush is attempted on every replica; reads, seeks, length, position, and
@@ -171,7 +171,7 @@ an index-ordered `AggregateException`. A failed operation is not transactional
 and can leave replicas with different prefixes. See
 [the ReplicaStream guide](https://github.com/DouglasCleghorn/TeeForge/blob/main/docs/replica-stream.md) for the complete contract.
 
-## Quick start: mirror a stream
+## Mirror a stream
 
 `TeeStream` presents multiple streams as one RAID-1-like mirror. An operation
 is available only when every destination supports it. Successful return values
