@@ -4,6 +4,27 @@ TeeForge provides .NET I/O primitives that distribute one producer's data to mul
 
 ## Language
 
+**Stream composer**:
+The coordinator of a connected stream graph, its metadata, and its lifecycle.
+It admits compositions that satisfy configured requirements while participating
+streams own their I/O, buffering, migration, and recovery behavior.
+
+**Composition participant**:
+A stream or an adapter representing a stream that supplies the composition
+contract, including its guarantees and supported recovery behavior.
+
+**Composition requirements**:
+The guarantees a caller requires of a stream composition. Eligibility depends
+on the participating streams and their connections.
+
+**Composition recovery behavior**:
+A participant's declared ability to continue from saved state, replay from a
+boundary, restart its work, or remain unavailable after restoration.
+
+**Managed backing**:
+A backing resource whose mutations are controlled exclusively through the
+composition during migration, including overwrites, growth, and truncation.
+
 **Handoff stream**:
 A stable stream endpoint that serializes operations and accepts a caller-created
 replacement stream assumed to have the same final destination. The outgoing
@@ -133,20 +154,45 @@ A TeeStream that refuses further operations after discovering inconsistent desti
 **Use primary**:
 A TeeStream consistency policy that accepts differences between destinations and exposes the primary stream's data or return value.
 
-**TeePipe**:
+**BroadcastPipe**:
 A pipe with one writer and a fixed set of readers that broadcasts the same byte sequence to every reader. Each reader observes the complete sequence independently rather than competing with other readers for data.
+_Avoid_: TeePipe (previous name).
 
 **Active reader**:
-A TeePipe reader that has not completed and therefore still participates in broadcast delivery and flow control.
+A BroadcastPipe reader that has not completed and therefore still participates in broadcast delivery and flow control.
 
 **Reader completion**:
-The normal or exceptional end of one TeePipe reader's participation in the broadcast. Reader completions are independently observable by their fixed reader indexes.
+The normal or exceptional end of one BroadcastPipe reader's participation in the broadcast. Reader completions are independently observable by their fixed reader indexes.
 
 **TeeHashStream**:
 A write-only buffered stream that mirrors writes to ordinary destinations while computing one or more explicitly selected hashes of the same observed byte sequence. Every constructor receives its algorithm or algorithm collection as the first parameter; TeeHashStream has no implicit default algorithm.
 
 **Hash destination**:
 An internal TeeHashStream destination that observes writes and computes one configured hash without retaining the written content.
+
+**Broadcast stream**:
+A coordinator that exposes a fixed list of independent readable streams over
+one source. Each reader receives the complete sequence at its own pace.
+
+**Broadcast hash stream**:
+A broadcast stream with one ordered set of hashes describing the entire
+broadcast sequence, independently of each reader's progress.
+
+**Broadcast completion**:
+Successful arrival at the end of the source sequence, independently of whether
+all readers have consumed it.
+
+**Broadcast copy**:
+A copy of one source sequence to multiple destinations that advance
+independently through a shared buffer.
+
+**Copy destination failure policy**:
+The rule deciding whether a failed destination stops the whole broadcast copy
+or leaves healthy destinations receiving the remaining source sequence.
+
+**Hash-returning copy**:
+A copy to one or more destinations that returns one set of source-sequence hashes
+after the source reaches EOF and every destination copy succeeds.
 
 **Hash-observed sequence**:
 The ordered bytes accepted by a hash destination. Each successful delivery is an observation, so bytes delivered again by buffered retry behavior are included again.
@@ -158,16 +204,13 @@ The point at which every hash destination has finalized and TeeHashResults publi
 A TeeForge enum naming MD5, SHA-1, SHA-2, SHA-3, CRC, and XXHash algorithms supported by TeeHashStream. One TeeHashAlgorithm-based call may mix cryptographic and non-cryptographic members. Each member's public API description identifies its family so callers can distinguish security-oriented hashes from non-cryptographic checksums and fast content hashes in IntelliSense and generated documentation; MD5 and SHA-1 additionally warn about their broken collision resistance.
 
 **Hash algorithm adapter**:
-The public conversion boundary between HashAlgorithmName and TeeHashAlgorithm. Standard cryptographic names convert in both directions. A non-cryptographic TeeHashAlgorithm has no HashAlgorithmName representation, so its try-conversion returns false; adapting names does not add non-cryptographic behavior to the original HashAlgorithmName-based TeeHashStream path.
+The public conversion boundary between HashAlgorithmName and TeeHashAlgorithm. Standard cryptographic names convert in both directions. A non-cryptographic TeeHashAlgorithm has no HashAlgorithmName representation, so its try-conversion returns false; adapting names does not add non-cryptographic behavior to the cryptographic HashAlgorithmName-based TeeHashStream path.
+
+**TeeHashAlgorithmId**:
+A shared value identifier accepting either TeeHashAlgorithm or HashAlgorithmName implicitly. Its Name and IsCryptographic distinguish named cryptographic hashes from checksums. Standard cryptographic algorithms compare equally across both input forms; custom .NET names remain available subject to runtime support.
 
 **TeeHashResults**:
-A stable, externally read-only results collection returned during TeeHashStream construction. It is empty while hashing is in progress. After every configured hash has been finalized, all results are published together and IsComplete becomes true.
+A stable, externally read-only dictionary from TeeHashAlgorithmId to TeeHashResult. Both algorithm input APIs use this single result collection. The collection remains empty until every configured hash completes, then publishes all results atomically in selection order. Lookups accept either identifier input form.
 
 **TeeHashResult**:
-An immutable completed hash value containing its HashAlgorithmName and digest bytes, with hexadecimal and Base64 representations computed lazily. Results published by TeeHashResults appear only after collection completion and do not carry an individual completion flag.
-
-**TeeHashResult<TAlgorithm>**:
-An immutable completed hash value keyed by an enum algorithm identifier, with immutable digest bytes and lazy hexadecimal and Base64 representations. TeeHashResult<TeeHashAlgorithm> is the result shape used by TeeHashAlgorithm-based TeeHashStream calls, while the existing non-generic TeeHashResult preserves the HashAlgorithmName API.
-
-**TeeHashResults<TAlgorithm>**:
-A stable, externally read-only dictionary from enum algorithm identifiers to TeeHashResult<TAlgorithm> values. TeeHashResults<TeeHashAlgorithm> supports mixed cryptographic and non-cryptographic algorithms and uses the same empty-until-complete, atomic-publication contract as the existing non-generic TeeHashResults.
+An immutable completed hash value containing its TeeHashAlgorithmId and digest bytes, with hexadecimal, padded Base64, unpadded Base64url, and uppercase padded RFC 4648 Base32 representations computed lazily. Results published by TeeHashResults appear only after collection completion and do not carry an individual completion flag.

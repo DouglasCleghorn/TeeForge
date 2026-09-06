@@ -15,7 +15,7 @@ internal static class MultipathControlProtocol
         ArgumentNullException.ThrowIfNull(message);
         return message.Kind switch
         {
-            MultipathControlMessageKind.ReliablePath => EncodeReliablePath(message),
+            MultipathControlMessageKind.PathReceivingValidFrames => EncodePathReceivingValidFrames(message),
             MultipathControlMessageKind.ModeChangeRequest => EncodeModeChange(message),
             MultipathControlMessageKind.EndpointAdvertisement => EncodeEndpoint(message),
             _ => throw new ArgumentOutOfRangeException(nameof(message)),
@@ -48,17 +48,17 @@ internal static class MultipathControlProtocol
         MultipathControlMessageKind kind = (MultipathControlMessageKind)body[5];
         return kind switch
         {
-            MultipathControlMessageKind.ReliablePath => DecodeReliablePath(body),
+            MultipathControlMessageKind.PathReceivingValidFrames => DecodePathReceivingValidFrames(body),
             MultipathControlMessageKind.ModeChangeRequest => DecodeModeChange(body),
             MultipathControlMessageKind.EndpointAdvertisement => DecodeEndpoint(body),
             _ => throw new InvalidDataException("The multipath control message kind is unsupported."),
         };
     }
 
-    private static byte[] EncodeReliablePath(MultipathControlMessage message)
+    private static byte[] EncodePathReceivingValidFrames(MultipathControlMessage message)
     {
         byte[] frame = CreateFrame(HeaderSize + 16, message.Kind);
-        message.PathId.TryWriteBytes(frame.AsSpan(sizeof(int) + HeaderSize, 16), bigEndian: true, out _);
+        message.GetPathReceivingValidFrames().TryWriteBytes(frame.AsSpan(sizeof(int) + HeaderSize, 16), bigEndian: true, out _);
         return frame;
     }
 
@@ -66,16 +66,18 @@ internal static class MultipathControlProtocol
     {
         byte[] frame = CreateFrame(HeaderSize + 4, message.Kind);
         Span<byte> payload = frame.AsSpan(sizeof(int) + HeaderSize);
-        payload[0] = (byte)message.Mode;
-        payload[1] = checked((byte)message.DataShardCount);
-        payload[2] = checked((byte)message.ParityShardCount);
+        MultipathModeChangeRequest request = message.GetModeChangeRequest();
+        payload[0] = (byte)request.Mode;
+        payload[1] = checked((byte)request.DataShardCount);
+        payload[2] = checked((byte)request.ParityShardCount);
         return frame;
     }
 
     private static byte[] EncodeEndpoint(MultipathControlMessage message)
     {
-        byte[] scheme = Encoding.UTF8.GetBytes(message.EndpointScheme!);
-        byte[] endpoint = message.EndpointData.ToArray();
+        MultipathEndpointAdvertisement advertisement = message.GetEndpointAdvertisement();
+        byte[] scheme = Encoding.UTF8.GetBytes(advertisement.Scheme);
+        byte[] endpoint = advertisement.Data.ToArray();
         byte[] frame = CreateFrame(
             checked(HeaderSize + 1 + scheme.Length + sizeof(ushort) + endpoint.Length),
             message.Kind);
@@ -87,14 +89,14 @@ internal static class MultipathControlProtocol
         return frame;
     }
 
-    private static MultipathControlMessage DecodeReliablePath(ReadOnlySpan<byte> body)
+    private static MultipathControlMessage DecodePathReceivingValidFrames(ReadOnlySpan<byte> body)
     {
         if (body.Length != HeaderSize + 16)
         {
-            throw new InvalidDataException("The reliable-path control message has an invalid length.");
+            throw new InvalidDataException("The path-observation control message has an invalid length.");
         }
 
-        return MultipathControlMessage.DecodeReliablePath(new Guid(body.Slice(HeaderSize, 16), bigEndian: true));
+        return MultipathControlMessage.CreatePathReceivingValidFrames(new Guid(body.Slice(HeaderSize, 16), bigEndian: true));
     }
 
     private static MultipathControlMessage DecodeModeChange(ReadOnlySpan<byte> body)
@@ -106,7 +108,7 @@ internal static class MultipathControlProtocol
 
         try
         {
-            return MultipathControlMessage.DecodeModeChange(
+            return MultipathControlMessage.CreateModeChangeRequest(
                 (MultipathStreamMode)body[HeaderSize],
                 body[HeaderSize + 1],
                 body[HeaderSize + 2]);
@@ -148,7 +150,7 @@ internal static class MultipathControlProtocol
             throw new InvalidDataException("The endpoint scheme is not valid UTF-8.", exception);
         }
 
-        return MultipathControlMessage.DecodeEndpoint(scheme, body.Slice(endpointOffset).ToArray());
+        return MultipathControlMessage.CreateEndpointAdvertisement(scheme, body.Slice(endpointOffset).ToArray());
     }
 
     private static byte[] CreateFrame(int bodyLength, MultipathControlMessageKind kind)

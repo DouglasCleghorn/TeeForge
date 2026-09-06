@@ -66,7 +66,7 @@ public class TeeHashStreamTests
         using var destination = new MemoryStream();
         var stream = new TeeHashStream(
             [TeeHashAlgorithm.SHA256, TeeHashAlgorithm.XxHash3, TeeHashAlgorithm.Crc32],
-            out TeeHashResults<TeeHashAlgorithm> results,
+            out TeeHashResults results,
             [destination],
             new TeeBufferedStreamOptions(leaveOpen: true, bufferSize: 127));
 
@@ -102,7 +102,7 @@ public class TeeHashStreamTests
     {
         byte[] payload = Enumerable.Range(0, 4099).Select(static value => (byte)value).ToArray();
         using var destination = new MemoryStream();
-        var stream = new TeeHashStream(algorithm, out TeeHashResults<TeeHashAlgorithm> results, destination);
+        var stream = new TeeHashStream(algorithm, out TeeHashResults results, destination);
 
         stream.Write(payload.AsSpan(0, 17));
         stream.Write(payload.AsSpan(17));
@@ -284,15 +284,19 @@ public class TeeHashStreamTests
         Assert.Equal([0x01, 0xAB, 0xFF], result.Bytes.ToArray());
         Assert.Equal("01ABFF", result.Hex);
         Assert.Equal("Aav/", result.Base64);
+        Assert.Equal("Aav_", result.Base64Url);
+        Assert.Equal("AGV76===", result.Base32);
         Assert.Same(result.Hex, result.Hex);
         Assert.Same(result.Base64, result.Base64);
+        Assert.Same(result.Base64Url, result.Base64Url);
+        Assert.Same(result.Base32, result.Base32);
     }
 
     [Fact]
-    public void Public_generic_hash_result_copies_input_and_exposes_stable_encodings()
+    public void Public_checksum_result_copies_input_and_exposes_stable_encodings()
     {
         byte[] bytes = [0x01, 0xAB, 0xFF];
-        var result = new TeeHashResult<TeeHashAlgorithm>(TeeHashAlgorithm.XxHash3, bytes);
+        var result = new TeeHashResult(TeeHashAlgorithm.XxHash3, bytes);
 
         bytes[0] = 0;
 
@@ -300,8 +304,12 @@ public class TeeHashStreamTests
         Assert.Equal([0x01, 0xAB, 0xFF], result.Bytes.ToArray());
         Assert.Equal("01ABFF", result.Hex);
         Assert.Equal("Aav/", result.Base64);
+        Assert.Equal("Aav_", result.Base64Url);
+        Assert.Equal("AGV76===", result.Base32);
         Assert.Same(result.Hex, result.Hex);
         Assert.Same(result.Base64, result.Base64);
+        Assert.Same(result.Base64Url, result.Base64Url);
+        Assert.Same(result.Base32, result.Base32);
     }
 
     [Fact]
@@ -334,17 +342,6 @@ public class TeeHashStreamTests
         Assert.False(results.ContainsKey(HashAlgorithmName.SHA256));
         Assert.False(results.TryGetValue(HashAlgorithmName.SHA256, out _));
         Assert.Throws<KeyNotFoundException>(() => results[HashAlgorithmName.SHA256]);
-    }
-
-    private static void AssertPending(TeeHashResults<TeeHashAlgorithm> results)
-    {
-        Assert.False(results.IsComplete);
-        Assert.Empty(results);
-        Assert.Empty(results.Keys);
-        Assert.Empty(results.Values);
-        Assert.False(results.ContainsKey(TeeHashAlgorithm.SHA256));
-        Assert.False(results.TryGetValue(TeeHashAlgorithm.SHA256, out _));
-        Assert.Throws<KeyNotFoundException>(() => results[TeeHashAlgorithm.SHA256]);
     }
 
     private static byte[] ComputeNonCryptographicHash(TeeHashAlgorithm algorithm, ReadOnlySpan<byte> payload)

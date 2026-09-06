@@ -12,24 +12,61 @@ internal interface IHashAccumulator : IDisposable
 
 internal static class TeeHashAlgorithmFactory
 {
-    internal static IHashAccumulator Create(HashAlgorithmName algorithm) =>
-        new CryptographicHashAccumulator(algorithm);
+    internal static TeeHashAlgorithmId[] Normalize(IEnumerable<HashAlgorithmName> algorithms) =>
+        Normalize(algorithms, static algorithm => new TeeHashAlgorithmId(algorithm));
 
-    internal static IHashAccumulator Create(TeeHashAlgorithm algorithm)
+    internal static TeeHashAlgorithmId[] Normalize(IEnumerable<TeeHashAlgorithm> algorithms) =>
+        Normalize(algorithms, static algorithm => new TeeHashAlgorithmId(algorithm));
+
+    private static TeeHashAlgorithmId[] Normalize<TAlgorithm>(
+        IEnumerable<TAlgorithm> algorithms, Func<TAlgorithm, TeeHashAlgorithmId> identify)
     {
-        if (TeeHashAlgorithmAdapter.TryToHashAlgorithmName(algorithm, out HashAlgorithmName cryptographicName))
+        ArgumentNullException.ThrowIfNull(algorithms);
+        var selected = new List<TeeHashAlgorithmId>();
+        var identities = new HashSet<TeeHashAlgorithmId>();
+        foreach (TAlgorithm algorithm in algorithms)
         {
-            return Create(cryptographicName);
+            TeeHashAlgorithmId id;
+            try
+            {
+                id = identify(algorithm);
+            }
+            catch (ArgumentException exception)
+            {
+                throw new ArgumentException($"Hash algorithm at index {selected.Count} is invalid.", nameof(algorithms), exception);
+            }
+
+            if (!identities.Add(id))
+            {
+                throw new ArgumentException($"Hash algorithm at index {selected.Count} is duplicated.", nameof(algorithms));
+            }
+
+            selected.Add(id);
         }
 
-        NonCryptographicHashAlgorithm hash = algorithm switch
+        if (selected.Count == 0)
         {
-            TeeHashAlgorithm.Crc32 => new Crc32(),
-            TeeHashAlgorithm.Crc64 => new Crc64(),
-            TeeHashAlgorithm.XxHash32 => new XxHash32(),
-            TeeHashAlgorithm.XxHash64 => new XxHash64(),
-            TeeHashAlgorithm.XxHash3 => new XxHash3(),
-            TeeHashAlgorithm.XxHash128 => new XxHash128(),
+            throw new ArgumentException("At least one hash algorithm is required.", nameof(algorithms));
+        }
+
+        return selected.ToArray();
+    }
+
+    internal static IHashAccumulator Create(TeeHashAlgorithmId algorithm)
+    {
+        if (algorithm.IsCryptographic)
+        {
+            return new CryptographicHashAccumulator(new HashAlgorithmName(algorithm.Name));
+        }
+
+        NonCryptographicHashAlgorithm hash = algorithm.Name switch
+        {
+            nameof(TeeHashAlgorithm.Crc32) => new Crc32(),
+            nameof(TeeHashAlgorithm.Crc64) => new Crc64(),
+            nameof(TeeHashAlgorithm.XxHash32) => new XxHash32(),
+            nameof(TeeHashAlgorithm.XxHash64) => new XxHash64(),
+            nameof(TeeHashAlgorithm.XxHash3) => new XxHash3(),
+            nameof(TeeHashAlgorithm.XxHash128) => new XxHash128(),
             _ => throw new ArgumentOutOfRangeException(nameof(algorithm)),
         };
 

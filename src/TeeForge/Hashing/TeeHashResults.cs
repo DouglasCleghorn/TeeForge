@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
-using System.Security.Cryptography;
 
 namespace TeeForge.Hashing;
 
@@ -11,7 +10,7 @@ namespace TeeForge.Hashing;
     "Naming",
     "CA1710:Identifiers should have correct suffix",
     Justification = "TeeHashResults is the accepted domain name for the completed hash collection.")]
-public class TeeHashResults : IReadOnlyDictionary<HashAlgorithmName, TeeHashResult>
+public class TeeHashResults : IReadOnlyDictionary<TeeHashAlgorithmId, TeeHashResult>
 {
     private Snapshot _snapshot = Snapshot.Incomplete;
 
@@ -26,23 +25,23 @@ public class TeeHashResults : IReadOnlyDictionary<HashAlgorithmName, TeeHashResu
     public int Count => Volatile.Read(ref _snapshot).Values.Count;
 
     /// <inheritdoc/>
-    public IEnumerable<HashAlgorithmName> Keys => Volatile.Read(ref _snapshot).Values.Keys;
+    public IEnumerable<TeeHashAlgorithmId> Keys => Volatile.Read(ref _snapshot).Values.Keys;
 
     /// <inheritdoc/>
     public IEnumerable<TeeHashResult> Values => Volatile.Read(ref _snapshot).Values.Values;
 
     /// <inheritdoc/>
-    public TeeHashResult this[HashAlgorithmName key] => Volatile.Read(ref _snapshot).Values[key];
+    public TeeHashResult this[TeeHashAlgorithmId key] => Volatile.Read(ref _snapshot).Values[key];
 
     /// <inheritdoc/>
-    public bool ContainsKey(HashAlgorithmName key) => Volatile.Read(ref _snapshot).Values.ContainsKey(key);
+    public bool ContainsKey(TeeHashAlgorithmId key) => Volatile.Read(ref _snapshot).Values.ContainsKey(key);
 
     /// <inheritdoc/>
-    public bool TryGetValue(HashAlgorithmName key, out TeeHashResult value) =>
+    public bool TryGetValue(TeeHashAlgorithmId key, out TeeHashResult value) =>
         Volatile.Read(ref _snapshot).Values.TryGetValue(key, out value!);
 
     /// <inheritdoc/>
-    public IEnumerator<KeyValuePair<HashAlgorithmName, TeeHashResult>> GetEnumerator() =>
+    public IEnumerator<KeyValuePair<TeeHashAlgorithmId, TeeHashResult>> GetEnumerator() =>
         Volatile.Read(ref _snapshot).Values.GetEnumerator();
 
     /// <inheritdoc/>
@@ -50,7 +49,7 @@ public class TeeHashResults : IReadOnlyDictionary<HashAlgorithmName, TeeHashResu
 
     internal void Publish(IEnumerable<TeeHashResult> completedResults)
     {
-        var values = new OrderedDictionary<HashAlgorithmName, TeeHashResult>();
+        var values = new OrderedDictionary<TeeHashAlgorithmId, TeeHashResult>();
         foreach (TeeHashResult result in completedResults)
         {
             values.Add(result.Algorithm, result);
@@ -58,7 +57,7 @@ public class TeeHashResults : IReadOnlyDictionary<HashAlgorithmName, TeeHashResu
 
         var completed = new Snapshot(
             isComplete: true,
-            new ReadOnlyDictionary<HashAlgorithmName, TeeHashResult>(values));
+            new ReadOnlyDictionary<TeeHashAlgorithmId, TeeHashResult>(values));
 
         if (!ReferenceEquals(
                 Interlocked.CompareExchange(ref _snapshot, completed, Snapshot.Incomplete),
@@ -70,15 +69,15 @@ public class TeeHashResults : IReadOnlyDictionary<HashAlgorithmName, TeeHashResu
 
     private sealed class Snapshot(
         bool isComplete,
-        IReadOnlyDictionary<HashAlgorithmName, TeeHashResult> values)
+        IReadOnlyDictionary<TeeHashAlgorithmId, TeeHashResult> values)
     {
         internal static Snapshot Incomplete { get; } = new(
             isComplete: false,
-            new ReadOnlyDictionary<HashAlgorithmName, TeeHashResult>(
-                new OrderedDictionary<HashAlgorithmName, TeeHashResult>()));
+            new ReadOnlyDictionary<TeeHashAlgorithmId, TeeHashResult>(
+                new OrderedDictionary<TeeHashAlgorithmId, TeeHashResult>()));
 
         internal bool IsComplete { get; } = isComplete;
 
-        internal IReadOnlyDictionary<HashAlgorithmName, TeeHashResult> Values { get; } = values;
+        internal IReadOnlyDictionary<TeeHashAlgorithmId, TeeHashResult> Values { get; } = values;
     }
 }

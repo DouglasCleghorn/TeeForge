@@ -45,6 +45,15 @@ jobs:
       - name: Forward-only streaming example
         run: dotnet run -c Release --project samples/TeeForge.Streaming --no-build --no-restore
 
+      - name: Run five quickstart recipes
+        run: dotnet run -c Release --project samples/TeeForge.Quickstart --no-build --no-restore
+
+      - name: Verify generated documentation and build documentation site
+        shell: pwsh
+        run: |
+          ./eng/update-docs.ps1 -Check
+          ./eng/build-docs-site.ps1
+
       - name: Stress smoke
         if: runner.os == 'Linux'
         run: dotnet run -c Release --project tests/TeeForge.StressTests --no-build -- 25

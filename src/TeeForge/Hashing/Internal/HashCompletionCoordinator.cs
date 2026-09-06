@@ -1,32 +1,45 @@
 namespace TeeForge.Hashing.Internal;
 
-internal interface IHashCompletionCoordinator
+internal sealed class HashCompletionCoordinator
 {
-    void Complete(int index, byte[] digest);
-}
-
-internal sealed class HashCompletionCoordinator<TAlgorithm, TResult> : IHashCompletionCoordinator
-    where TAlgorithm : notnull
-{
-    private readonly TAlgorithm[] _algorithms;
+    private readonly TeeHashAlgorithmId[] _algorithms;
     private readonly byte[]?[] _digests;
-    private readonly Action<IEnumerable<TResult>> _publish;
-    private readonly Func<TAlgorithm, byte[], TResult> _resultFactory;
+    private readonly TeeHashResults _results;
     private int _remaining;
 
-    internal HashCompletionCoordinator(
-        TAlgorithm[] algorithms,
-        Func<TAlgorithm, byte[], TResult> resultFactory,
-        Action<IEnumerable<TResult>> publish)
+    private HashCompletionCoordinator(TeeHashAlgorithmId[] algorithms, TeeHashResults results)
     {
         _algorithms = algorithms;
         _digests = new byte[algorithms.Length][];
         _remaining = algorithms.Length;
-        _resultFactory = resultFactory;
-        _publish = publish;
+        _results = results;
     }
 
-    public void Complete(int index, byte[] digest)
+    internal static HashWriteStream[] CreateStreams(TeeHashAlgorithmId[] algorithms, TeeHashResults results)
+    {
+        var completion = new HashCompletionCoordinator(algorithms, results);
+        var streams = new HashWriteStream[algorithms.Length];
+        try
+        {
+            for (int index = 0; index < streams.Length; index++)
+            {
+                streams[index] = new HashWriteStream(algorithms[index], completion, index);
+            }
+
+            return streams;
+        }
+        catch
+        {
+            foreach (HashWriteStream? stream in streams)
+            {
+                stream?.DisposeWithoutFinalizing();
+            }
+
+            throw;
+        }
+    }
+
+    internal void Complete(int index, byte[] digest)
     {
         ArgumentNullException.ThrowIfNull(digest);
 
@@ -40,14 +53,14 @@ internal sealed class HashCompletionCoordinator<TAlgorithm, TResult> : IHashComp
             return;
         }
 
-        var completed = new TResult[_algorithms.Length];
+        var completed = new TeeHashResult[_algorithms.Length];
         for (int resultIndex = 0; resultIndex < completed.Length; resultIndex++)
         {
-            completed[resultIndex] = _resultFactory(
+            completed[resultIndex] = TeeHashResult.FromOwnedBytes(
                 _algorithms[resultIndex],
                 _digests[resultIndex]!);
         }
 
-        _publish(completed);
+        _results.Publish(completed);
     }
 }

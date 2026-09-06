@@ -21,15 +21,20 @@ and auditable, accepting that multiple CPU-bound algorithms do not run in
 parallel unless the surrounding TeeStream synchronous mode already provides
 that execution behavior.
 
-The original `HashAlgorithmName` API remains cryptographic-only. A separate
-`TeeHashAlgorithm` enum provides a closed, documented set of cryptographic and
-non-cryptographic algorithms and permits both families in one call. Its result
-dictionary is strongly keyed through `TeeHashResults<TeeHashAlgorithm>` and
-`TeeHashResult<TeeHashAlgorithm>`. Public adapters convert standard
-cryptographic identifiers between the two naming types; try-conversion from a
-non-cryptographic enum member to `HashAlgorithmName` returns false rather than
-inventing a cryptographic name.
+The `HashAlgorithmName` overloads simplify porting and calling from .NET code
+that already selects cryptographic hashes. `TeeHashAlgorithm` provides a closed,
+documented set of cryptographic and non-cryptographic algorithms and permits
+both families in one call. Both input APIs return `TeeHashResults` containing
+`TeeHashResult` values, keyed by `TeeHashAlgorithmId`. Implicit conversions let
+callers look up results with either input type. Standard cryptographic names
+have the same identity through both forms; custom .NET names retain their
+runtime-defined support. The shared identifier distinguishes cryptographic
+names from checksums with identical text.
 
+Public adapters convert standard cryptographic identifiers between the two
+input types. Try-conversion from a non-cryptographic enum member to
+`HashAlgorithmName` returns false. Construction, accumulation, and completion
+share one internal path after input normalization.
 Every constructor requires the algorithm or algorithm sequence as its first
 argument. There is no implicit SHA-256 selection. Buffered configuration is
 carried by `TeeBufferedStreamOptions`, including buffer size, so the advanced

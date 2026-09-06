@@ -1,40 +1,20 @@
-using System.Security.Cryptography;
-
 namespace TeeForge.Hashing.Internal;
 
 internal sealed class HashWriteStream : Stream
 {
-    private readonly IHashCompletionCoordinator? _completion;
+    private readonly HashCompletionCoordinator? _completion;
     private readonly IHashAccumulator _hash;
     private readonly int _resultIndex;
     private int _disposed;
 
-    internal HashWriteStream(HashAlgorithmName algorithm) => _hash = TeeHashAlgorithmFactory.Create(algorithm);
-
-    internal HashWriteStream(TeeHashAlgorithm algorithm) => _hash = TeeHashAlgorithmFactory.Create(algorithm);
+    internal HashWriteStream(TeeHashAlgorithmId algorithm) => _hash = TeeHashAlgorithmFactory.Create(algorithm);
 
     internal HashWriteStream(
-        HashAlgorithmName algorithm,
-        IHashCompletionCoordinator completion,
+        TeeHashAlgorithmId algorithm,
+        HashCompletionCoordinator completion,
         int resultIndex)
-        : this(TeeHashAlgorithmFactory.Create(algorithm), completion, resultIndex)
+        : this(algorithm)
     {
-    }
-
-    internal HashWriteStream(
-        TeeHashAlgorithm algorithm,
-        IHashCompletionCoordinator completion,
-        int resultIndex)
-        : this(TeeHashAlgorithmFactory.Create(algorithm), completion, resultIndex)
-    {
-    }
-
-    private HashWriteStream(
-        IHashAccumulator hash,
-        IHashCompletionCoordinator completion,
-        int resultIndex)
-    {
-        _hash = hash;
         _completion = completion;
         _resultIndex = resultIndex;
     }
