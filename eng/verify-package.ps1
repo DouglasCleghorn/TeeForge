@@ -10,6 +10,13 @@ $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
+[xml] $centralPackages = Get-Content -LiteralPath (Join-Path $PSScriptRoot '../Directory.Packages.props') -Raw
+$hashingVersions = @($centralPackages.SelectNodes("/Project/ItemGroup/PackageVersion[@Include='System.IO.Hashing']"))
+if ($hashingVersions.Count -ne 1 -or [string]::IsNullOrWhiteSpace($hashingVersions[0].Version)) {
+    throw "Expected exactly one System.IO.Hashing version in Directory.Packages.props."
+}
+$expectedHashingVersion = $hashingVersions[0].Version
+
 $resolvedDirectory = (Resolve-Path -LiteralPath $PackageDirectory).Path
 $packages = @(Get-ChildItem -LiteralPath $resolvedDirectory -Filter "TeeForge.*.nupkg" -File |
     Where-Object { $_.Name -notlike "*.snupkg" })
@@ -171,7 +178,7 @@ try {
     }
 
     $dependency = $dependencies[0]
-    if ($dependency.id -ne "System.IO.Hashing" -or $dependency.version -ne "10.0.11") {
+    if ($dependency.id -ne "System.IO.Hashing" -or $dependency.version -ne $expectedHashingVersion) {
         throw "Unexpected runtime dependency '$($dependency.id)' version '$($dependency.version)'."
     }
 }
