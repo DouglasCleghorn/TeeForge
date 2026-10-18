@@ -21,13 +21,13 @@ jobs:
     outputs:
       version: ${{ steps.release.outputs.version }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 10.0.400
+          global-json-file: global.json
       - name: Validate version and release ancestry
         id: release
         shell: pwsh
@@ -62,13 +62,13 @@ jobs:
         shell: pwsh
     steps:
       # Publish exactly the checked artifact; no checkout or build with publishing permissions.
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@v8
         with:
           name: nuget-package
           path: package
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 10.0.400
+          dotnet-version: 10.0.401
       - name: Verify exact artifact before requesting credentials
         id: package
         env:
@@ -105,7 +105,7 @@ jobs:
           "path=$((Resolve-Path -LiteralPath "package/TeeForge.$version.nupkg").Path)" >> $env:GITHUB_OUTPUT
       - name: Obtain short-lived NuGet credential
         id: login
-        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        uses: NuGet/login@v1
         with:
           user: ${{ vars.NUGET_USER }}
       - name: Publish validated package and symbols
