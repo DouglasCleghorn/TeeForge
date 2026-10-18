@@ -22,12 +22,12 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v6.0.0
+        uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
           cache: true
@@ -90,7 +90,7 @@ jobs:
 
       - name: Upload package
         if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v7.0.2
+        uses: actions/upload-artifact@v7
         with:
           name: nuget-package
           path: artifacts/package/*
@@ -105,10 +105,10 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-dotnet@v6.0.0
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
       - name: Restore experimental tests
