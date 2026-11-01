@@ -588,6 +588,19 @@ dotnet test --project tests/TeeForge.Tests/TeeForge.Tests.csproj -c Release --no
 dotnet pack src/TeeForge/TeeForge.csproj -c Release --no-build --no-restore
 ```
 
+After changing central package versions, run `pwsh ./eng/update-dependency-locks.ps1`
+with the SDK pinned in `global.json`, and commit all changed `packages.lock.json`
+files. The script restores the full solution, including experimental projects and
+Windows tools, then verifies a locked restore. CI continues to require locked
+dependencies.
+
+Dependabot can leave consumers' lock files stale when updating a project dependency
+([upstream issue](https://github.com/dependabot/dependabot-core/issues/13474)).
+After a failed Dependabot PR check, the repair workflow regenerates all lock files
+in a read-only job. A separate job validates and commits only existing lock files
+to that same PR, then explicitly reruns CI. It skips closed or superseded PR heads
+and leaves build or test failures that need code changes for a maintainer to fix.
+
 ## License and provenance
 
 TeeForge is available under the

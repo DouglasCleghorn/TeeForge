@@ -1,0 +1,131 @@
+name: Repair Dependabot lock files
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-lock-files-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.actor.login == 'dependabot[bot]' &&
+      github.event.workflow_run.head_repository.id == github.event.repository.id
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      pr-number: ${{ steps.pr.outputs.number }}
+      artifact-id: ${{ steps.artifact.outputs.artifact-id }}
+    steps:
+      - name: Find the current Dependabot PR
+        id: pr
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const prs = await github.paginate(github.rest.pulls.list, {
+              ...context.repo, state: 'open',
+              head: `${context.repo.owner}:${run.head_branch}`,
+            });
+            const pr = prs.find(pr =>
+              pr.user.login === 'dependabot[bot]' &&
+              pr.head.repo?.id === context.payload.repository.id &&
+              pr.head.sha === run.head_sha &&
+              pr.base.ref === context.payload.repository.default_branch);
+            if (pr) core.setOutput('number', pr.number);
+
+      - uses: actions/checkout@v7
+        if: steps.pr.outputs.number != ''
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v6
+        if: steps.pr.outputs.number != ''
+        with:
+          global-json-file: global.json
+
+      # This job executes PR code and package restore targets with read-only
+      # permissions. It never receives the publishing job's write token.
+      - name: Regenerate all lock files
+        if: steps.pr.outputs.number != ''
+        shell: pwsh
+        run: ./eng/update-dependency-locks.ps1
+
+      - name: Collect lock-file changes as data
+        id: changes
+        if: steps.pr.outputs.number != ''
+        shell: pwsh
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $paths = @(git diff --name-only -- '**/packages.lock.json')
+          if ($LASTEXITCODE -ne 0) { throw 'Could not list lock-file changes.' }
+          if ($paths.Count -eq 0) { exit 0 }
+          $updates = @($paths | ForEach-Object {
+            @{ path = $_; content = Get-Content -LiteralPath $_ -Raw }
+          })
+          $directory = Join-Path $env:RUNNER_TEMP 'dependency-locks'
+          New-Item -ItemType Directory -Force $directory | Out-Null
+          @{ headSha = $env:HEAD_SHA; updates = $updates } |
+            ConvertTo-Json -Depth 100 |
+            Set-Content (Join-Path $directory 'updates.json') -Encoding utf8NoBOM
+          'changed=true' >> $env:GITHUB_OUTPUT
+
+      - uses: actions/upload-artifact@v7
+        id: artifact
+        if: steps.changes.outputs.changed == 'true'
+        with:
+          name: dependabot-lock-files
+          path: ${{ runner.temp }}/dependency-locks/updates.json
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: refresh
+    if: needs.refresh.outputs.artifact-id != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: read
+      actions: write
+    steps:
+      # Only trusted default-branch code runs with write permissions. Never
+      # check out the PR, run dotnet, or execute anything from the artifact here.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ needs.refresh.outputs.artifact-id }}
+          path: ${{ runner.temp }}/dependency-locks
+          merge-multiple: true
+
+      - name: Commit validated lock files and run CI on the new head
+        uses: actions/github-script@v8
+        env:
+          PR_NUMBER: ${{ needs.refresh.outputs.pr-number }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const payload = JSON.parse(fs.readFileSync(
+              path.join(process.env.RUNNER_TEMP, 'dependency-locks/updates.json'), 'utf8'));
+            await require('./eng/publish-dependency-locks.cjs')({
+              github, context, core, payload, prNumber: Number(process.env.PR_NUMBER),
+            });
