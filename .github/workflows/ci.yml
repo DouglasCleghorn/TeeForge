@@ -36,6 +36,10 @@ jobs:
       - name: Restore locked dependencies
         run: dotnet restore TeeForge.Core.slnx --locked-mode
 
+      - name: Verify dependency repair safeguards
+        if: runner.os == 'Linux'
+        run: node --test eng/publish-dependency-locks.test.cjs
+
       - name: Build
         run: dotnet build TeeForge.Core.slnx -c Release --no-restore
 
