@@ -30,7 +30,7 @@ jobs:
     steps:
       - name: Find the current Dependabot PR
         id: pr
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const run = context.payload.workflow_run;
@@ -117,7 +117,7 @@ jobs:
           merge-multiple: true
 
       - name: Commit validated lock files and run CI on the new head
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           PR_NUMBER: ${{ needs.refresh.outputs.pr-number }}
         with:
