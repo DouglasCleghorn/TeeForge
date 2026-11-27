@@ -209,8 +209,7 @@ public class ErasureImage : ErasureStream
             for (long codeword = 0; codeword < codewordCount; codeword++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                CacheEntry entry = AcquireEntry(codeword);
-                await entry.Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                CacheEntry entry = await AcquireLockedEntryAsync(codeword, cancellationToken).ConfigureAwait(false);
                 try
                 {
                     await EnsureAllDataLoadedAsync(entry, cancellationToken).ConfigureAwait(false);
@@ -341,8 +340,7 @@ public class ErasureImage : ErasureStream
             for (long codeword = 0; codeword < codewordCount; codeword++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                CacheEntry entry = AcquireEntry(codeword);
-                await entry.Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                CacheEntry entry = await AcquireLockedEntryAsync(codeword, cancellationToken).ConfigureAwait(false);
                 try
                 {
                     await EnsureAllDataLoadedAsync(entry, cancellationToken).ConfigureAwait(false);

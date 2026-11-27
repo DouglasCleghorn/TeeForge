@@ -106,6 +106,141 @@ public class ErasureStreamTests
         Assert.Equal(expected, actual);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Reopened_sets_distinguish_empty_sparse_blocks_from_truncated_blocks(bool native)
+    {
+        using MemoryStream first = native ? new RandomAccessMemoryStream() : new MemoryStream();
+        using var second = new MemoryStream();
+        using var parity = new MemoryStream();
+        Stream[] members = [first, second, parity];
+        var options = new ErasureStreamOptions(leaveOpen: true, readAheadBlockCount: 0);
+        await using (var writer = ErasureStream.Create(members, 2, 1, 8192, BlockSize, options))
+        {
+            await writer.WriteAtAsync(new byte[] { 42 }, BlockSize);
+            await writer.CompleteAsync();
+        }
+
+        Assert.Equal(0, first.Length);
+        using (var sparse = ErasureStream.Open(members, 2, 1, 8192, BlockSize, options))
+        {
+            Assert.Equal(0, sparse.ReadByte());
+            sparse.Position = BlockSize;
+            Assert.Equal(42, sparse.ReadByte());
+        }
+
+        using (var writable = ErasureStream.Open(members, 2, 1, 8192, BlockSize, options))
+        {
+            writable.WriteAt([37], 0);
+        }
+
+        await using var damaged = ErasureStream.Open(members, 2, 1, 8192, BlockSize, options);
+        first.SetLength(BlockSize / 2);
+        Assert.Throws<EndOfStreamException>(() => ErasureStream.Open(members, 2, 1, 8192, BlockSize, options));
+        byte[] data = new byte[BlockSize];
+        Assert.Throws<EndOfStreamException>(() => damaged.ReadAt(data, 0));
+        await Assert.ThrowsAsync<EndOfStreamException>(() => damaged.ReadAtAsync(data, 0).AsTask());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Member_failure_and_disposal_drain_started_writes(bool forwardOnly)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var pending = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var failed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var first = new ControlledWriteMember(forwardOnly, () => new ValueTask(pending.Task));
+        using var second = new ControlledWriteMember(forwardOnly, () =>
+        {
+            failed.SetResult();
+            throw new IOException("Member write failed.");
+        });
+        using var parity = new MemoryStream();
+        var options = new ErasureStreamOptions(leaveOpen: true, maximumCacheBytes: 1, readAheadBlockCount: 0);
+        var stream = ErasureStream.Create([first, second, parity], 2, 1, 8192, BlockSize, options);
+        byte[] bytes = new byte[8192];
+        Task writing = forwardOnly
+            ? stream.WriteAsync(bytes, timeout.Token).AsTask()
+            : stream.WriteAtAsync(bytes, 0, timeout.Token).AsTask();
+        await failed.Task.WaitAsync(timeout.Token);
+        Task disposing = stream.DisposeAsync().AsTask();
+        Task alsoDisposing = stream.DisposeAsync().AsTask();
+        try
+        {
+            Assert.False(writing.IsCompleted);
+            Assert.False(disposing.IsCompleted);
+            Assert.False(alsoDisposing.IsCompleted);
+        }
+        finally
+        {
+            pending.SetResult();
+            await Task.WhenAll(disposing, alsoDisposing).WaitAsync(timeout.Token);
+        }
+
+        await Assert.ThrowsAsync<IOException>(() => writing);
+    }
+
+    [Fact]
+    public async Task Canceling_a_contended_cache_read_releases_its_reference()
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var first = new GatedReadMember();
+        using var second = new MemoryStream(new byte[BlockSize]);
+        using var parity = new MemoryStream(new byte[BlockSize]);
+        await using var stream = ErasureStream.Open([first, second, parity], 2, 1, 8192, BlockSize,
+            new ErasureStreamOptions(leaveOpen: true, maximumCacheBytes: 1, readAheadBlockCount: 0));
+        Task<int> reading = stream.ReadAtAsync(new byte[1], 0, timeout.Token).AsTask();
+        await first.Started.Task.WaitAsync(timeout.Token);
+        using var cancel = new CancellationTokenSource();
+        Task<int> waiting = stream.ReadAtAsync(new byte[1], 0, cancel.Token).AsTask();
+        try
+        {
+            await cancel.CancelAsync();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiting);
+        }
+        finally
+        {
+            first.Release.SetResult();
+        }
+
+        Assert.Equal(1, await reading);
+        Assert.Equal(1, await stream.ReadAtAsync(new byte[1], 0, timeout.Token));
+        Assert.Equal(2, first.Reads);
+    }
+
+    private sealed class ControlledWriteMember(bool forwardOnly, Func<ValueTask> write) : MemoryStream, ITeeRandomAccessStream
+    {
+        public override bool CanSeek => !forwardOnly;
+        public bool CanReadAt => !forwardOnly;
+        public bool CanWriteAt => !forwardOnly;
+        public int ReadAt(Span<byte> buffer, long offset) => throw new NotSupportedException();
+        public ValueTask<int> ReadAtAsync(Memory<byte> buffer, long offset, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+        public void WriteAt(ReadOnlySpan<byte> buffer, long offset) => throw new NotSupportedException();
+        public ValueTask WriteAtAsync(ReadOnlyMemory<byte> buffer, long offset, CancellationToken cancellationToken = default) => write();
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) => write();
+    }
+
+    private sealed class GatedReadMember() : MemoryStream(new byte[BlockSize])
+    {
+        internal TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal int Reads { get; private set; }
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            if (++Reads == 1)
+            {
+                Started.SetResult();
+                await Release.Task.WaitAsync(cancellationToken);
+            }
+
+            return await base.ReadAsync(buffer, cancellationToken);
+        }
+    }
+
     private static MemoryStream[] CreateMembers(int count) =>
         Enumerable.Range(0, count).Select(static _ => new MemoryStream()).ToArray();
 

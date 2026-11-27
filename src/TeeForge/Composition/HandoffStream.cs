@@ -799,6 +799,7 @@ public class HandoffStream : Stream, ITeeRandomAccessStream
             }
 
             await migration.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+            replacement.Position = migration.Position;
             if (destinationIsAuthoritative)
             {
                 migration.ReleaseDestinationOwnership();

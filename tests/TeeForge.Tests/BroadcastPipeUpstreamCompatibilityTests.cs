@@ -44,6 +44,36 @@ public class BroadcastPipeUpstreamCompatibilityTests
     }
 
     [Fact]
+    public async Task Minimum_read_allows_progress_and_an_independent_slow_reader_keeps_backpressure()
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var pipe = new BroadcastPipe(2, new BroadcastPipeOptions(pauseWriterThreshold: 64, resumeWriterThreshold: 32));
+        PipeReader framing = pipe.Readers[0];
+        PipeReader other = pipe.Readers[1];
+        byte[] chunk = new byte[32];
+
+        await pipe.Writer.WriteAsync(chunk, timeout.Token);
+        Task<FlushResult> paused = pipe.Writer.WriteAsync(chunk, timeout.Token).AsTask();
+        Assert.False(paused.IsCompleted);
+        Task<ReadResult> frame = framing.ReadAtLeastAsync(128, timeout.Token).AsTask();
+        Assert.False(paused.IsCompleted);
+        ReadResult prefix = await other.ReadAsync(timeout.Token);
+        other.AdvanceTo(prefix.Buffer.End);
+        await paused;
+
+        await pipe.Writer.WriteAsync(chunk, timeout.Token);
+        Task<FlushResult> last = pipe.Writer.WriteAsync(chunk, timeout.Token).AsTask();
+        ReadResult complete = await frame;
+        Assert.Equal(128, complete.Buffer.Length);
+        framing.AdvanceTo(complete.Buffer.End);
+        Assert.False(last.IsCompleted);
+        other.Complete();
+        await last;
+        framing.Complete();
+        pipe.Writer.Complete();
+    }
+
+    [Fact]
     public async Task ReadAtLeast_waits_for_requested_bytes()
     {
         var pipe = new BroadcastPipe(1);

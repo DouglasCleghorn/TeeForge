@@ -43,13 +43,24 @@ jobs:
       - name: Build
         run: dotnet build TeeForge.Core.slnx -c Release --no-restore
 
+      - name: Install the QUIC runtime
+        if: runner.os == 'Linux'
+        run: |
+          . /etc/os-release
+          curl -fsSL "https://packages.microsoft.com/config/ubuntu/${VERSION_ID}/packages-microsoft-prod.deb" -o "$RUNNER_TEMP/packages-microsoft-prod.deb"
+          sudo dpkg --force-confold -i "$RUNNER_TEMP/packages-microsoft-prod.deb"
+          sudo apt-get update
+          sudo apt-get install -y libmsquic
+
       - name: Test
+        env:
+          TEEFORGE_REQUIRE_QUIC: ${{ runner.os != 'macOS' && '1' || '0' }}
         run: dotnet test --project tests/TeeForge.Tests/TeeForge.Tests.csproj -c Release --no-build --no-restore --minimum-expected-tests 1
 
       - name: Forward-only streaming example
         run: dotnet run -c Release --project samples/TeeForge.Streaming --no-build --no-restore
 
-      - name: Run five quickstart recipes
+      - name: Run quickstart recipes
         run: dotnet run -c Release --project samples/TeeForge.Quickstart --no-build --no-restore
 
       - name: Verify generated documentation and build documentation site

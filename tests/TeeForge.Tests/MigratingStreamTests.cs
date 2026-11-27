@@ -256,6 +256,39 @@ public class MigratingStreamTests
         Assert.Equal([1, 9, 3, 4], destination.ToArray());
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Handoff_preserves_sequential_progress_after_migration_or_rollback(bool cancel)
+    {
+        using var source = new MemoryStream([10, 20, 30, 40]) { Position = 1 };
+        using var destination = new GatedFirstWriteStream("destination", new(), gateSecondWrite: cancel);
+        using var stop = new CancellationTokenSource();
+        await using var handoff = new HandoffStream(source, leaveOpen: true);
+        Task migrating = handoff.MigrateAsync(destination,
+            new MigratingStreamOptions(bufferSize: 2, leaveSourceOpen: true, leaveDestinationOpen: true), stop.Token);
+        await destination.FirstWriteStarted;
+        byte[] value = new byte[1];
+        ValueTask<int> read = handoff.ReadAsync(value.AsMemory());
+        destination.ReleaseFirstWrite();
+        Assert.Equal(1, await read);
+        Assert.Equal(20, value[0]);
+
+        if (cancel)
+        {
+            await destination.SecondWriteStarted;
+            await stop.CancelAsync();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => migrating);
+        }
+        else
+        {
+            await migrating;
+        }
+
+        Assert.Equal(2, handoff.Position);
+        Assert.Equal(30, handoff.ReadByte());
+    }
+
     [Fact]
     public async Task HandoffStream_restores_source_when_migration_fails()
     {

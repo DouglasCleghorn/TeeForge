@@ -361,10 +361,16 @@ public class MutualQuicConnectionTests
             .AsSpan()
             .SequenceEqual(expected.GetCertHash(HashAlgorithmName.SHA256));
 
-    private static void SkipIfQuicIsUnavailable() =>
-        Assert.SkipWhen(
-            !MutualQuicConnection.IsSupported || !MutualQuicConnectionListener.IsSupported,
-            "System.Net.Quic is not supported on this machine.");
+    private static void SkipIfQuicIsUnavailable()
+    {
+        bool supported = MutualQuicConnection.IsSupported && MutualQuicConnectionListener.IsSupported;
+        if (Environment.GetEnvironmentVariable("TEEFORGE_REQUIRE_QUIC") == "1")
+        {
+            Assert.True(supported, "This runner must execute the live QUIC tests.");
+        }
+
+        Assert.SkipWhen(!supported, "System.Net.Quic is not supported on this machine.");
+    }
 
     private sealed class TestIdentity : IDisposable
     {

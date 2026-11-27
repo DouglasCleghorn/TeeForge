@@ -2,6 +2,42 @@ namespace TeeForge.Tests;
 
 public class RandomAccessStreamTests
 {
+    [Theory]
+    [InlineData(FileOptions.None)]
+    [InlineData(FileOptions.Asynchronous)]
+    public async Task Buffered_file_mixed_io_observes_the_last_write_and_preserves_position(FileOptions options)
+    {
+        string path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        await using var file = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None,
+            bufferSize: 4096, options | FileOptions.DeleteOnClose);
+        await using var tee = new TeeStream(new TeeStreamOptions(leaveOpen: true), file);
+        tee.Write([1, 2, 3, 4]);
+        byte[] bytes = new byte[4];
+        Assert.Equal(4, tee.ReadAt(bytes, 0));
+        Assert.Equal([1, 2, 3, 4], bytes);
+        tee.WriteByte(5);
+        await using (Stream tail = await tee.OpenReadRangeAsync(4, 1))
+        {
+            Assert.Equal(5, tail.ReadByte());
+        }
+
+        Assert.Equal(5, file.Position);
+        tee.Position = 0;
+        Assert.Equal(1, tee.ReadByte());
+        await tee.WriteAtAsync(new byte[] { 9 }, 1);
+        Assert.Equal(1, tee.Position);
+        Assert.Equal(9, tee.ReadByte());
+
+        tee.Position = 0;
+        await tee.WriteAsync(new byte[] { 6, 7, 8 });
+        tee.WriteAt([10], 0);
+        await tee.FlushAsync();
+        Assert.Equal(3, tee.Position);
+        Assert.Equal(4, await tee.ReadAtAsync(bytes, 0));
+        Assert.Equal([10, 7, 8, 4], bytes);
+        Assert.Equal(3, tee.Position);
+    }
+
     [Fact]
     public async Task File_adapter_reads_and_writes_without_moving_position()
     {
