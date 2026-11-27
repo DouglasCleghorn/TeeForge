@@ -1,6 +1,6 @@
 # Broadcast a stream to independent readers
 
-TeeForge 0.1.0 · .NET 10 · **released**
+TeeForge 0.2.0 · .NET 10 · **unreleased**
 
 Start all consumers concurrently so slow-reader backpressure can make progress.
 

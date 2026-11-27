@@ -23,7 +23,8 @@ $recipes = @(
     @{ Slug = 'hash'; File = 'HashExample.cs'; Title = 'Calculate multiple hashes while copying a stream'; Note = 'Compute SHA-256 and XXH3 in one copy; access the SHA-256 result with either identifier form.' },
     @{ Slug = 'replicate'; File = 'ReplicationExample.cs'; Title = 'Replicate writes to multiple writable streams'; Note = 'Use a write-only wrapper and explicitly retain destination ownership.' },
     @{ Slug = 'broadcast'; File = 'BroadcastExample.cs'; Title = 'Broadcast a stream to independent readers'; Note = 'Start all consumers concurrently so slow-reader backpressure can make progress.' },
-    @{ Slug = 'random-access'; File = 'RandomAccessExample.cs'; Title = 'Read byte ranges without changing stream Position'; Note = 'Use explicit offsets and bounded range streams with independent cursors.' }
+    @{ Slug = 'random-access'; File = 'RandomAccessExample.cs'; Title = 'Read byte ranges without changing stream Position'; Note = 'Use explicit offsets and bounded range streams with independent cursors.' },
+    @{ Slug = 'remote-zip'; File = 'RemoteZipExample.cs'; Title = 'Read one entry from a remote ZIP or NuGet package'; Note = 'Open a range-enabled URL with a bounded read-ahead window and let ZipArchive locate the entry. Append a URL and entry name to the command to write its contents to standard output.' }
 )
 $recipeLinks = [Collections.Generic.List[string]]::new()
 foreach ($recipe in $recipes) {
@@ -116,7 +117,7 @@ Experimental storage and mounting tools are not part of the NuGet package.
 
 ## Start here
 - [Usage guide]($origin/$version/agent-guide.md): API selection, installation, ownership, completion, and pitfalls.
-- [Runnable recipes]($origin/$version/recipes/index.md): Five examples compiled and executed in CI.
+- [Runnable recipes]($origin/$version/recipes/index.md): Examples compiled and executed in CI, including remote ZIP entry extraction.
 - [Public API signatures]($origin/$version/api-reference.md): Exact analyzer-checked signatures grouped by namespace.
 - [Documentation versions]($origin/versions.json): Available package versions and release status.
 

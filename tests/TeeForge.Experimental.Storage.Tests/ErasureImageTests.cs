@@ -214,8 +214,48 @@ public class ErasureImageTests
         Assert.Equal(payload, actual);
     }
 
+    [Fact]
+    public async Task Disposal_waits_for_parity_maintenance_and_closes_the_new_member()
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        MemoryStream[] members = CreateMembers(3);
+        var image = ErasureImage.Create(members, 2, 1, 2 * BlockSize, BlockSize);
+        await image.WriteAsync(CreatePayload(2 * BlockSize), timeout.Token);
+        using var target = new PausedParityMember();
+        Task expanding = image.IncreaseParityAsync(target, timeout.Token).AsTask();
+        await target.Started.Task.WaitAsync(timeout.Token);
+        Task disposing = image.DisposeAsync().AsTask();
+        try
+        {
+            Assert.False(disposing.IsCompleted);
+            Assert.False(image.CanWrite);
+        }
+        finally
+        {
+            target.Release.TrySetResult();
+            await Task.WhenAll(expanding, disposing).WaitAsync(timeout.Token);
+        }
+
+        Assert.Equal(2, image.ParityShardCount);
+        Assert.False(target.CanRead);
+        Assert.All(members, member => Assert.False(member.CanRead));
+    }
+
     private static MemoryStream[] CreateMembers(int count) =>
         Enumerable.Range(0, count).Select(static _ => new MemoryStream()).ToArray();
+
+    private sealed class PausedParityMember : MemoryStream
+    {
+        internal TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            Started.TrySetResult();
+            await Release.Task.WaitAsync(cancellationToken);
+            await base.WriteAsync(buffer, cancellationToken);
+        }
+    }
 
     private static byte[] CreatePayload(int length, int seed = 17)
     {

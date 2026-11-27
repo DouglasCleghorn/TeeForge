@@ -15,6 +15,7 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
 {
     private readonly object _cacheSync = new();
     private readonly object _operationSync = new();
+    private readonly object _disposeSync = new();
     private readonly Dictionary<long, CacheEntry> _cache = [];
     private readonly LinkedList<CacheEntry> _cacheLru = [];
     private readonly SemaphoreSlim _positionGate = new(1, 1);
@@ -34,6 +35,7 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
     private int _activeOperations;
     private TaskCompletionSource? _operationsDrained;
     private int _disposed;
+    private Task? _disposeTask;
 
     internal ErasureStream(
         MemberAccessor?[] members,
@@ -125,6 +127,8 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
 
         var accessors = new MemberAccessor?[count];
         var seen = new HashSet<Stream>(ReferenceEqualityComparer.Instance);
+        long codewordBytes = (long)dataShardCount * blockSize;
+        long codewordCount = logicalLength == 0 ? 0 : 1 + (logicalLength - 1) / codewordBytes;
         for (int index = 0; index < count; index++)
         {
             Stream? member = members[index];
@@ -136,6 +140,15 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
             if (!seen.Add(member))
             {
                 throw new ArgumentException($"Member {index} duplicates another stream object.", nameof(members));
+            }
+
+            if (member.CanSeek)
+            {
+                long length = member.Length;
+                if (length % blockSize != 0 && length / blockSize < codewordCount)
+                {
+                    throw new EndOfStreamException($"Erasure member {index} ends partway through a stored block.");
+                }
             }
 
             accessors[index] = new MemberAccessor(member);
@@ -181,20 +194,19 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
         Enumerable.Range(0, _members.Length).Where(index => _members[index] is null).ToArray();
 
     /// <inheritdoc/>
-    public override bool CanRead => !IsDisposed && ReadableMemberCount >= DataShardCount;
+    public override bool CanRead => !IsDisposed && MembersCanRead;
 
     /// <inheritdoc/>
-    public override bool CanSeek => !IsDisposed && (CanReadAt || CanWriteAt);
+    public override bool CanSeek => !IsDisposed && (MembersCanReadAt || MembersCanWriteAt);
 
     /// <inheritdoc/>
-    public override bool CanWrite => !IsDisposed && _members.All(static member => member?.CanWrite == true);
+    public override bool CanWrite => !IsDisposed && MembersCanWrite;
 
     /// <inheritdoc/>
-    public bool CanReadAt => !IsDisposed && _members.Count(static member => member?.CanReadAt == true) >= DataShardCount;
+    public bool CanReadAt => !IsDisposed && MembersCanReadAt;
 
     /// <inheritdoc/>
-    public bool CanWriteAt => !IsDisposed && _members.All(static member => member?.CanWriteAt == true) &&
-        _members.Take(DataShardCount).All(static member => member?.CanReadAt == true);
+    public bool CanWriteAt => !IsDisposed && MembersCanWriteAt;
 
     /// <inheritdoc/>
     public override long Length
@@ -239,12 +251,13 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
     /// <inheritdoc/>
     public override int Read(Span<byte> buffer)
     {
+        using OperationLease operation = EnterOperation();
         _positionGate.Wait();
         try
         {
             long position = _position;
             int read;
-            if (CanReadAt)
+            if (MembersCanReadAt)
             {
                 read = ReadAtCore(buffer, position, streaming: true);
                 ScheduleReadAhead(position + read);
@@ -275,12 +288,13 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
         Memory<byte> buffer,
         CancellationToken cancellationToken = default)
     {
+        using OperationLease operation = EnterOperation();
         await _positionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             long position = _position;
             int read;
-            if (CanReadAt)
+            if (MembersCanReadAt)
             {
                 read = await ReadAtAsyncCore(
                     buffer,
@@ -304,11 +318,14 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
     }
 
     /// <inheritdoc/>
-    public int ReadAt(Span<byte> buffer, long offset) => ReadAtCore(buffer, offset, streaming: false);
+    public int ReadAt(Span<byte> buffer, long offset)
+    {
+        using OperationLease operation = EnterOperation();
+        return ReadAtCore(buffer, offset, streaming: false);
+    }
 
     private int ReadAtCore(Span<byte> buffer, long offset, bool streaming)
     {
-        using OperationLease operation = EnterOperation();
         EnsureCanReadAt();
         int requested = ValidateReadRange(offset, buffer.Length);
         int completed = 0;
@@ -343,11 +360,14 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
     }
 
     /// <inheritdoc/>
-    public ValueTask<int> ReadAtAsync(
+    public async ValueTask<int> ReadAtAsync(
         Memory<byte> buffer,
         long offset,
-        CancellationToken cancellationToken = default) =>
-        ReadAtAsyncCore(buffer, offset, streaming: false, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        using OperationLease operation = EnterOperation();
+        return await ReadAtAsyncCore(buffer, offset, streaming: false, cancellationToken).ConfigureAwait(false);
+    }
 
     private async ValueTask<int> ReadAtAsyncCore(
         Memory<byte> buffer,
@@ -355,7 +375,6 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
         bool streaming,
         CancellationToken cancellationToken)
     {
-        using OperationLease operation = EnterOperation();
         EnsureCanReadAt();
         int requested = ValidateReadRange(offset, buffer.Length);
         int completed = 0;
@@ -367,8 +386,7 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
             int count = Math.Min(requested - completed, BlockSize - within);
             bool completedCodeword = logical + count == LogicalLength ||
                 (logical + count) % ((long)DataShardCount * BlockSize) == 0;
-            CacheEntry entry = AcquireEntry(codeword);
-            await entry.Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            CacheEntry entry = await AcquireLockedEntryAsync(codeword, cancellationToken).ConfigureAwait(false);
             try
             {
                 await EnsureDataShardLoadedAsync(entry, dataIndex, cancellationToken).ConfigureAwait(false);
@@ -400,11 +418,12 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
     /// <inheritdoc/>
     public override void Write(ReadOnlySpan<byte> buffer)
     {
+        using OperationLease operation = EnterOperation();
         _positionGate.Wait();
         try
         {
             long position = _position;
-            if (CanWriteAt)
+            if (MembersCanWriteAt)
             {
                 WriteAtCore(buffer, position, streaming: true);
             }
@@ -437,11 +456,12 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
         ReadOnlyMemory<byte> buffer,
         CancellationToken cancellationToken = default)
     {
+        using OperationLease operation = EnterOperation();
         await _positionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             long position = _position;
-            if (CanWriteAt)
+            if (MembersCanWriteAt)
             {
                 await WriteAtAsyncCore(
                     buffer,
@@ -463,11 +483,14 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
     }
 
     /// <inheritdoc/>
-    public void WriteAt(ReadOnlySpan<byte> buffer, long offset) => WriteAtCore(buffer, offset, streaming: false);
+    public void WriteAt(ReadOnlySpan<byte> buffer, long offset)
+    {
+        using OperationLease operation = EnterOperation();
+        WriteAtCore(buffer, offset, streaming: false);
+    }
 
     private void WriteAtCore(ReadOnlySpan<byte> buffer, long offset, bool streaming)
     {
-        using OperationLease operation = EnterOperation();
         EnsureCanWriteAt();
         ValidateWriteRange(offset, buffer.Length);
         int completed = 0;
@@ -511,11 +534,14 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
     }
 
     /// <inheritdoc/>
-    public ValueTask WriteAtAsync(
+    public async ValueTask WriteAtAsync(
         ReadOnlyMemory<byte> buffer,
         long offset,
-        CancellationToken cancellationToken = default) =>
-        WriteAtAsyncCore(buffer, offset, streaming: false, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        using OperationLease operation = EnterOperation();
+        await WriteAtAsyncCore(buffer, offset, streaming: false, cancellationToken).ConfigureAwait(false);
+    }
 
     private async ValueTask WriteAtAsyncCore(
         ReadOnlyMemory<byte> buffer,
@@ -523,7 +549,6 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
         bool streaming,
         CancellationToken cancellationToken)
     {
-        using OperationLease operation = EnterOperation();
         EnsureCanWriteAt();
         ValidateWriteRange(offset, buffer.Length);
         int completed = 0;
@@ -536,8 +561,7 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
             int withinCodeword = checked((int)(logical % codewordBytes));
             int count = Math.Min(buffer.Length - completed, checked((int)(codewordBytes - withinCodeword)));
             bool fullCodeword = withinCodeword == 0 && count == codewordBytes;
-            CacheEntry entry = AcquireEntry(codeword);
-            await entry.Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            CacheEntry entry = await AcquireLockedEntryAsync(codeword, cancellationToken).ConfigureAwait(false);
             try
             {
                 if (fullCodeword)
@@ -551,7 +575,7 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
 
                 DataShardRange touched = ApplyToData(entry, buffer.Span.Slice(completed, count), withinCodeword);
                 EncodeParity(entry);
-                await WriteChangedMembersAsync(entry, touched, cancellationToken).ConfigureAwait(false);
+                await WriteMembersAsync(entry, touched, cancellationToken).ConfigureAwait(false);
             }
             finally
             {
@@ -570,11 +594,11 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
     /// <summary>Seals a forward-only final partial codeword and flushes all members.</summary>
     public async ValueTask CompleteAsync(CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
+        using OperationLease operation = EnterOperation();
         await _positionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (!CanWriteAt && !_forwardWriteCompleted)
+            if (!MembersCanWriteAt && !_forwardWriteCompleted)
             {
                 if (_position != LogicalLength)
                 {
@@ -583,13 +607,12 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
 
                 if (_forwardWriteCodeword * (long)DataShardCount * BlockSize < LogicalLength)
                 {
-                    CacheEntry entry = AcquireEntry(_forwardWriteCodeword);
-                    await entry.Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    CacheEntry entry = await AcquireLockedEntryAsync(_forwardWriteCodeword, cancellationToken).ConfigureAwait(false);
                     try
                     {
                         EnsureEveryShardAllocated(entry);
                         EncodeParity(entry);
-                        await WriteSequentialCodewordAsync(entry, cancellationToken).ConfigureAwait(false);
+                        await WriteMembersAsync(entry, positionalChanges: null, cancellationToken).ConfigureAwait(false);
                     }
                     finally
                     {
@@ -612,7 +635,7 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
     /// <inheritdoc/>
     public override void Flush()
     {
-        ThrowIfDisposed();
+        using OperationLease operation = EnterOperation();
         foreach (MemberAccessor? member in _members)
         {
             member?.Stream.Flush();
@@ -620,8 +643,11 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
     }
 
     /// <inheritdoc/>
-    public override Task FlushAsync(CancellationToken cancellationToken) =>
-        FlushMembersAsync(cancellationToken).AsTask();
+    public override async Task FlushAsync(CancellationToken cancellationToken)
+    {
+        using OperationLease operation = EnterOperation();
+        await FlushMembersAsync(cancellationToken).ConfigureAwait(false);
+    }
 
     /// <inheritdoc/>
     public override long Seek(long offset, SeekOrigin origin)
@@ -655,65 +681,61 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
     /// <inheritdoc/>
     protected override void Dispose(bool disposing)
     {
-        if (!disposing || Interlocked.Exchange(ref _disposed, 1) != 0)
+        if (disposing)
         {
-            base.Dispose(disposing);
-            return;
+            BeginDispose(asynchronously: false).GetAwaiter().GetResult();
         }
-
-        _prefetchCancellation.Cancel();
-        WaitForPrefetch();
-        ClearCache();
-        _positionGate.Dispose();
-        _maintenanceGate.Dispose();
-        _prefetchCancellation.Dispose();
-        DisposeMembers(disposeStreams: !_options.LeaveOpen);
-
         base.Dispose(disposing);
     }
 
     /// <inheritdoc/>
     public override async ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
-        {
-            await base.DisposeAsync().ConfigureAwait(false);
-            return;
-        }
-
-        _prefetchCancellation.Cancel();
-        Task[] tasks;
-        lock (_cacheSync)
-        {
-            tasks = _prefetchTasks.ToArray();
-        }
-
-        await Task.WhenAll(tasks).ConfigureAwait(false);
-        ClearCache();
-        if (!_options.LeaveOpen)
-        {
-            foreach (MemberAccessor? member in _members)
-            {
-                if (member is not null)
-                {
-                    await member.Stream.DisposeAsync().ConfigureAwait(false);
-                }
-            }
-        }
-
-        foreach (MemberAccessor? member in _members)
-        {
-            member?.Dispose();
-        }
-
-        _positionGate.Dispose();
-        _maintenanceGate.Dispose();
-        _prefetchCancellation.Dispose();
-        GC.SuppressFinalize(this);
+        await BeginDispose(asynchronously: true).ConfigureAwait(false);
         await base.DisposeAsync().ConfigureAwait(false);
+        GC.SuppressFinalize(this);
     }
 
-    private int ReadableMemberCount => _members.Count(static member => member?.CanRead == true);
+    private Task BeginDispose(bool asynchronously)
+    {
+        lock (_disposeSync)
+        {
+            if (_disposeTask?.IsCompleted == true)
+            {
+                return Task.CompletedTask;
+            }
+
+            return _disposeTask ??= ReleaseResourcesAsync(asynchronously);
+        }
+    }
+
+    private async Task ReleaseResourcesAsync(bool asynchronously)
+    {
+        Volatile.Write(ref _disposed, 1);
+        try
+        {
+            _prefetchCancellation.Cancel();
+        }
+        finally
+        {
+            await BeginMaintenanceAsync(CancellationToken.None, disposing: true).ConfigureAwait(false);
+            EndMaintenance();
+            ClearCache();
+            _positionGate.Dispose();
+            _prefetchCancellation.Dispose();
+            await DisposeMembersAsync(!_options.LeaveOpen, asynchronously).ConfigureAwait(false);
+        }
+    }
+
+    // Admitted operations retain their member access until disposal has drained their leases.
+    private bool MembersCanRead => _members.Count(static member => member?.CanRead == true) >= DataShardCount;
+
+    private bool MembersCanWrite => _members.All(static member => member?.CanWrite == true);
+
+    private bool MembersCanReadAt => _members.Count(static member => member?.CanReadAt == true) >= DataShardCount;
+
+    private bool MembersCanWriteAt => _members.All(static member => member?.CanWriteAt == true) &&
+        _members.Take(DataShardCount).All(static member => member?.CanReadAt == true);
 
     private bool IsDisposed => Volatile.Read(ref _disposed) != 0;
 
@@ -749,6 +771,21 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
             entry.RecentlyUsed = true;
             entry.References++;
             return entry;
+        }
+    }
+
+    internal async ValueTask<CacheEntry> AcquireLockedEntryAsync(long codeword, CancellationToken cancellationToken)
+    {
+        CacheEntry entry = AcquireEntry(codeword);
+        try
+        {
+            await entry.Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            return entry;
+        }
+        catch
+        {
+            ReleaseEntry(entry);
+            throw;
         }
     }
 
@@ -797,8 +834,8 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
         {
             CacheEntry candidate = node.Value;
             bool canEvict = candidate.References == 0 &&
-                (!CanRead || CanReadAt || candidate.Codeword != _forwardReadCodeword) &&
-                (!CanWrite || CanWriteAt || _forwardWriteCompleted || candidate.Codeword != _forwardWriteCodeword);
+                (!MembersCanRead || MembersCanReadAt || candidate.Codeword != _forwardReadCodeword) &&
+                (!MembersCanWrite || MembersCanWriteAt || _forwardWriteCompleted || candidate.Codeword != _forwardWriteCodeword);
             if (canEvict && !candidate.RecentlyUsed)
             {
                 return candidate;
@@ -1030,33 +1067,44 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
         }
     }
 
-    private async ValueTask WriteChangedMembersAsync(
+    private async ValueTask WriteMembersAsync(
         CacheEntry entry,
-        DataShardRange touched,
+        DataShardRange? positionalChanges,
         CancellationToken cancellationToken)
     {
-        long offset = MemberBlockOffset(entry.Codeword);
+        long offset = positionalChanges.HasValue ? MemberBlockOffset(entry.Codeword) : 0;
         int pendingCount = 0;
-        for (int index = 0; index < _members.Length; index++)
+        Exception? firstError = null;
+        try
         {
-            if (index < DataShardCount && !touched.Contains(index))
+            for (int index = 0; index < _members.Length; index++)
             {
-                continue;
-            }
+                if (positionalChanges is { } touched && index < DataShardCount && !touched.Contains(index))
+                {
+                    continue;
+                }
 
-            ValueTask write = _members[index]!
-                .WriteAtAsync(entry.Shards[index]!.AsMemory(0, BlockSize), offset, cancellationToken);
-            if (write.IsCompletedSuccessfully)
-            {
-                write.GetAwaiter().GetResult();
-            }
-            else
-            {
-                entry.PendingWriteTasks[pendingCount++] = write.AsTask();
+                MemberAccessor member = _members[index]!;
+                ReadOnlyMemory<byte> shard = entry.Shards[index]!.AsMemory(0, BlockSize);
+                ValueTask write = positionalChanges.HasValue
+                    ? member.WriteAtAsync(shard, offset, cancellationToken)
+                    : member.Stream.WriteAsync(shard, cancellationToken);
+                if (write.IsCompletedSuccessfully)
+                {
+                    write.GetAwaiter().GetResult();
+                }
+                else
+                {
+                    entry.PendingWriteTasks[pendingCount++] = write.AsTask();
+                }
             }
         }
+        catch (Exception error)
+        {
+            // Earlier members still own their shard buffers until their writes finish.
+            firstError = error;
+        }
 
-        Exception? firstError = null;
         for (int index = 0; index < pendingCount; index++)
         {
             try
@@ -1108,8 +1156,7 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
         long offset,
         CancellationToken cancellationToken)
     {
-        using OperationLease operation = EnterOperation();
-        if (!CanRead)
+        if (!MembersCanRead)
         {
             throw new NotSupportedException("Fewer than the required number of members are readable.");
         }
@@ -1124,8 +1171,7 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
                 throw new NotSupportedException("Forward-only members cannot revisit or skip codewords.");
             }
 
-            CacheEntry entry = AcquireEntry(codeword);
-            await entry.Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            CacheEntry entry = await AcquireLockedEntryAsync(codeword, cancellationToken).ConfigureAwait(false);
             try
             {
                 await EnsureSequentialCodewordLoadedAsync(entry, cancellationToken).ConfigureAwait(false);
@@ -1155,8 +1201,7 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
         long offset,
         CancellationToken cancellationToken)
     {
-        using OperationLease operation = EnterOperation();
-        if (!CanWrite)
+        if (!MembersCanWrite)
         {
             throw new NotSupportedException("Every configured member must be writable.");
         }
@@ -1180,8 +1225,7 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
 
             int withinCodeword = checked((int)(logical % codewordBytes));
             int count = Math.Min(source.Length - completed, checked((int)(codewordBytes - withinCodeword)));
-            CacheEntry entry = AcquireEntry(codeword);
-            await entry.Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            CacheEntry entry = await AcquireLockedEntryAsync(codeword, cancellationToken).ConfigureAwait(false);
             try
             {
                 EnsureEveryShardAllocated(entry);
@@ -1189,7 +1233,7 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
                 if (withinCodeword + count == codewordBytes)
                 {
                     EncodeParity(entry);
-                    await WriteSequentialCodewordAsync(entry, cancellationToken).ConfigureAwait(false);
+                    await WriteMembersAsync(entry, positionalChanges: null, cancellationToken).ConfigureAwait(false);
                     _forwardWriteCodeword++;
                 }
             }
@@ -1240,16 +1284,9 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
         _codec.Reconstruct(entry.Shards!, entry.Present, 0, BlockSize);
     }
 
-    private async ValueTask WriteSequentialCodewordAsync(CacheEntry entry, CancellationToken cancellationToken)
-    {
-        Task[] writes = _members.Select((member, index) =>
-            member!.Stream.WriteAsync(entry.Shards[index]!.AsMemory(0, BlockSize), cancellationToken).AsTask()).ToArray();
-        await Task.WhenAll(writes).ConfigureAwait(false);
-    }
-
     private void ScheduleReadAhead(long nextOffset)
     {
-        if (_options.ReadAheadBlockCount == 0 || nextOffset >= LogicalLength || !CanReadAt || IsDisposed)
+        if (_options.ReadAheadBlockCount == 0 || nextOffset >= LogicalLength || IsDisposed || !MembersCanReadAt)
         {
             return;
         }
@@ -1293,8 +1330,7 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
     {
         try
         {
-            CacheEntry entry = AcquireEntry(codeword);
-            await entry.Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            CacheEntry entry = await AcquireLockedEntryAsync(codeword, cancellationToken).ConfigureAwait(false);
             try
             {
                 await EnsureDataShardLoadedAsync(entry, dataIndex, cancellationToken).ConfigureAwait(false);
@@ -1316,18 +1352,21 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
 
     private async ValueTask FlushMembersAsync(CancellationToken cancellationToken)
     {
-        ThrowIfDisposed();
         await Task.WhenAll(_members
             .Where(static member => member is not null)
-            .Select(member => member!.Stream.FlushAsync(cancellationToken))).ConfigureAwait(false);
+            .Select(async member => await member!.Stream.FlushAsync(cancellationToken).ConfigureAwait(false))).ConfigureAwait(false);
     }
 
-    internal async ValueTask BeginMaintenanceAsync(CancellationToken cancellationToken)
+    internal async ValueTask BeginMaintenanceAsync(CancellationToken cancellationToken, bool disposing = false)
     {
-        ThrowIfDisposed();
         await _maintenanceGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            if (!disposing)
+            {
+                ThrowIfDisposed();
+            }
+
             Task? drained = null;
             lock (_operationSync)
             {
@@ -1371,9 +1410,9 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
 
     private OperationLease EnterOperation()
     {
-        ThrowIfDisposed();
         lock (_operationSync)
         {
+            ThrowIfDisposed();
             if (_maintenanceActive)
             {
                 throw new InvalidOperationException("A parity-maintenance operation is active.");
@@ -1445,7 +1484,7 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
 
     private void EnsureCanReadAt()
     {
-        if (!CanReadAt)
+        if (!MembersCanReadAt)
         {
             throw new NotSupportedException("At least k members must support positional reads.");
         }
@@ -1453,7 +1492,7 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
 
     private void EnsureCanWriteAt()
     {
-        if (!CanWriteAt)
+        if (!MembersCanWriteAt)
         {
             throw new NotSupportedException("Every member must support positional writes and every data member must support positional reads.");
         }
@@ -1461,19 +1500,12 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(IsDisposed, this);
 
-    private void WaitForPrefetch()
-    {
-        Task[] tasks;
-        lock (_cacheSync)
-        {
-            tasks = _prefetchTasks.ToArray();
-        }
+    internal void DisposeMembers(bool disposeStreams = true) =>
+        DisposeMembersAsync(disposeStreams, asynchronously: false).GetAwaiter().GetResult();
 
-        Task.WhenAll(tasks).GetAwaiter().GetResult();
-    }
-
-    internal void DisposeMembers(bool disposeStreams = true)
+    private async Task DisposeMembersAsync(bool disposeStreams, bool asynchronously)
     {
+        Exception? firstFailure = null;
         foreach (MemberAccessor? member in _members)
         {
             if (member is null)
@@ -1481,12 +1513,33 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
                 continue;
             }
 
-            if (disposeStreams)
+            try
             {
-                member.Stream.Dispose();
+                if (disposeStreams)
+                {
+                    if (asynchronously)
+                    {
+                        await member.Stream.DisposeAsync().ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        member.Stream.Dispose();
+                    }
+                }
             }
+            catch (Exception error)
+            {
+                firstFailure ??= error;
+            }
+            finally
+            {
+                member.Dispose();
+            }
+        }
 
-            member.Dispose();
+        if (firstFailure is not null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(firstFailure);
         }
     }
 
@@ -1535,6 +1588,7 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
                     int read = _randomAccess.ReadAt(destination[completed..], offset + completed);
                     if (read == 0)
                     {
+                        ValidateBlockEnd(completed);
                         break;
                     }
 
@@ -1553,6 +1607,7 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
                     int read = Stream.Read(destination[completed..]);
                     if (read == 0)
                     {
+                        ValidateBlockEnd(completed);
                         break;
                     }
 
@@ -1581,6 +1636,7 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
                         .ConfigureAwait(false);
                     if (read == 0)
                     {
+                        ValidateBlockEnd(completed);
                         break;
                     }
 
@@ -1599,6 +1655,7 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
                     int read = await Stream.ReadAsync(destination[completed..], cancellationToken).ConfigureAwait(false);
                     if (read == 0)
                     {
+                        ValidateBlockEnd(completed);
                         break;
                     }
 
@@ -1608,6 +1665,15 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
             finally
             {
                 _gate.Release();
+            }
+        }
+
+        private static void ValidateBlockEnd(int bytesRead)
+        {
+            // Entire unwritten blocks in sparse sets read as zeros.
+            if (bytesRead != 0)
+            {
+                throw new EndOfStreamException("An erasure member ended partway through a stored block.");
             }
         }
 

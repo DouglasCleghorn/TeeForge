@@ -1,11 +1,11 @@
-# TeeForge 0.1 specification
+# TeeForge 0.2 specification
 
-Status: accepted for implementation on 2026-08-22; updated on 2026-08-24.
+Development specification for the unreleased 0.2.0 package.
 
 ## Package
 
 - Package ID and assembly name: `TeeForge`.
-- Version: `0.1.0`.
+- Version: `0.2.0`.
 - Target framework: `net10.0` only.
 - Public namespaces are organized by stable feature family:
   `TeeForge.Composition`, `TeeForge.Mirroring`, `TeeForge.Broadcasting`,
@@ -105,9 +105,11 @@ streams.
 handoff operation gate it flushes the current stream, constructs a paused
 MigratingStream over that source, installs it as current, and starts migration.
 Foreground operations through the stable endpoint therefore use the migration
-wrapper. When `MigrationCompletion` succeeds, the method flushes the wrapper,
-transfers destination ownership to HandoffStream, and atomically installs the
-destination. The retired wrapper is then disposed, applying source ownership
+wrapper. At either final handoff, the endpoint installs the authoritative
+backing and transfers the live cursor under the operation gate. If the backing
+rejects the cursor or flushing fails, it remains installed and the caller
+receives the error. An earlier migration failure takes precedence. The
+retired wrapper is then disposed, applying source ownership
 from `MigratingStreamOptions`; `HandoffStream.LeaveOpen` controls the adopted
 destination's eventual disposal.
 
@@ -117,7 +119,11 @@ disposal cannot close the restored endpoint. A failure confined to optional
 source cleanup occurs after destination activation and therefore keeps the
 destination installed. If an unrelated handoff replaces the migration wrapper
 before either boundary, migration completion does not overwrite that newer
-replacement and reports `InvalidOperationException`.
+replacement and reports `InvalidOperationException` when the copy succeeded.
+Disposing the endpoint during its migration cancels outstanding copying and
+waits for the authoritative backing before applying the endpoint's ownership
+policy. Starting a second migration on the same active migration wrapper
+raises `InvalidOperationException`.
 
 ## ReplicaStream
 
@@ -259,7 +265,9 @@ reserve and stream a useful multi-megabyte transfer while a consumer begins
 from its small prefix, avoiding one network request for every small read.
 
 `TeeRandomAccess.TryGet` discovers an existing implementation or adapts a
-`FileStream` through `System.IO.RandomAccess`. It deliberately does not adapt
+`FileStream` through `System.IO.RandomAccess`. Adapters for the same file
+stream synchronize its managed buffer before native positional I/O. The file
+stream retains its logical position. The discovery method does not adapt
 an arbitrary `CanSeek` stream. A public save/seek/restore adapter could race an
 unrelated owner of the same stream; only wrappers with exclusive ownership may
 use such a fallback internally.
@@ -267,12 +275,8 @@ use such a fallback internally.
 `TeeStream` exposes a capability only when every destination exposes it.
 Positional reads retain primary-sized consistency checking, positional writes
 attempt every destination, and a range open owns one bounded child stream per
-destination. Asynchronous fan-out starts all independent destination writes
-
-offsets through its BAT and uses an upstream capability for physical I/O when
-present. Independent upstream operations may be submitted together before awaiting their completion. These patterns
-permit an upstream device to exploit queueing such as NCQ without defining an
-NCQ API or guaranteeing a particular scheduling policy.
+destination. Asynchronous fan-out submits independent operations together so the
+underlying device can schedule them concurrently.
 
 `HttpRandomAccessStream` is a caller-`HttpClient`-owned, read-only leaf. Open
 uses a `bytes=0-0` GET probe to establish length and range support. Exact
@@ -292,12 +296,16 @@ shared not-before time across all in-flight reads. Defaults are three slowdown
 retries, a two-minute maximum requested wait, zero representation-change
 retries, three body-resume retries, and 250 ms exponential backoff with jitter.
 
-The HTTP leaf intentionally does not preload or cache. A future adaptive
-read-ahead/cache layer should consume `ITeeRangeReadSource`, initially reserve a
-large range (the current design target is 4 MiB), expose progressively filled
-prefixes, coalesce overlapping readers, and grow its reservation only after
-
-capability at its member-I/O boundary when a member implements it.
+`ReadAheadStream` wraps a readable, seekable, stable range source such as
+`HttpRandomAccessStream`. It snapshots the length and initial cursor, then
+opens one forward range on demand, bounded by `windowSize` (4 MiB by default)
+and the bytes remaining. Reads fill the window progressively. Cached bytes can
+be revisited, and seeking outside its filled prefix releases the active range.
+Sequential and explicit-offset reads share the window and serialize. Explicit
+offsets preserve the wrapper cursor and all reads preserve the source cursor.
+A short source that ends inside the promised range raises `EndOfStreamException`.
+Disposal closes the active range and, by default, the source. Pass
+`leaveOpen: true` to retain the source.
 
 ## TeeBufferedStream
 
@@ -602,7 +610,10 @@ processing occurs outside the critical sections.
 
 The active reader with the greatest unexamined byte count controls pause and
 resume. The writer pauses when any reader reaches `PauseWriterThreshold` and
-resumes only after all readers fall below `ResumeWriterThreshold`. A segment is
+resumes after the blocking readers fall below `ResumeWriterThreshold`. A reader
+waiting for more bytes via `ReadAtLeastAsync` temporarily releases its own
+backpressure until the requested minimum arrives. Other readers retain their
+normal thresholds. A segment is
 returned to the pool only after every active reader has consumed it.
 
 A completed reader immediately leaves the active set and can unblock the writer

@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using TeeForge.RandomAccess;
 
 namespace TeeForge.Composition;
@@ -15,7 +16,9 @@ public class HandoffStream : Stream, ITeeRandomAccessStream
     private readonly SemaphoreSlim _operationGate = new(1, 1);
     private readonly bool _leaveOpen;
     private Stream? _stream;
+    private PendingMigration? _pendingMigration;
     private int _disposed;
+    private readonly TaskCompletionSource _disposeCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <summary>Initializes a stable endpoint over the supplied stream.</summary>
     /// <param name="stream">The initial stream pipeline.</param>
@@ -378,6 +381,8 @@ public class HandoffStream : Stream, ITeeRandomAccessStream
     /// destination. Destination ownership transfers to this HandoffStream after a successful
     /// switch, so <see cref="LeaveOpen"/> controls its eventual disposal. If another handoff
     /// replaces the migration wrapper first, this method does not overwrite that replacement.
+    /// If the authoritative backing rejects the live cursor, the backing remains installed and
+    /// migration reports the failure. An earlier copy or cancellation error takes precedence.
     /// </remarks>
     public async Task MigrateAsync(
         Stream destination,
@@ -387,15 +392,19 @@ public class HandoffStream : Stream, ITeeRandomAccessStream
         ValidateReplacement(destination);
         MigratingStreamOptions resolvedOptions = options ?? new MigratingStreamOptions(
             leaveSourceOpen: _leaveOpen);
-        Stream? source = null;
-        MigratingStream? migration = null;
+        Task completion;
 
         await EnterOperationAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            source = CurrentStream;
+            Stream source = CurrentStream;
+            if (ReferenceEquals(_pendingMigration?.Wrapper, source))
+            {
+                throw new InvalidOperationException("A migration is already running on this endpoint.");
+            }
+
             await source.FlushAsync(cancellationToken).ConfigureAwait(false);
-            migration = new MigratingStream(
+            var migration = new MigratingStream(
                 source,
                 destination,
                 resolvedOptions,
@@ -413,46 +422,16 @@ public class HandoffStream : Stream, ITeeRandomAccessStream
                 migration.Dispose();
                 throw;
             }
+
+            completion = FinishMigrationHandoffAsync(migration, source, destination);
+            _pendingMigration = new PendingMigration(migration, completion);
         }
         finally
         {
             ExitOperation();
         }
 
-        try
-        {
-            await migration.MigrationCompletion.ConfigureAwait(false);
-        }
-        catch
-        {
-            bool destinationIsAuthoritative = migration.DestinationIsAuthoritative;
-            Stream replacement = destinationIsAuthoritative ? destination : source;
-            bool switched = await FinishMigrationHandoffAsync(
-                    migration,
-                    replacement,
-                    destinationIsAuthoritative)
-                .ConfigureAwait(false);
-            await migration.DisposeAsync().ConfigureAwait(false);
-            if (!switched)
-            {
-                throw new InvalidOperationException(
-                    "The migration wrapper was replaced before migration finished.");
-            }
-
-            throw;
-        }
-
-        bool completedSwitch = await FinishMigrationHandoffAsync(
-                migration,
-                destination,
-                destinationIsAuthoritative: true)
-            .ConfigureAwait(false);
-        await migration.DisposeAsync().ConfigureAwait(false);
-        if (!completedSwitch)
-        {
-            throw new InvalidOperationException(
-                "The migration wrapper was replaced before migration finished.");
-        }
+        await completion.ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
@@ -688,29 +667,15 @@ public class HandoffStream : Stream, ITeeRandomAccessStream
     /// <inheritdoc/>
     protected override void Dispose(bool disposing)
     {
-        if (!disposing || Interlocked.Exchange(ref _disposed, 1) != 0)
-        {
-            base.Dispose(disposing);
-            return;
-        }
-
-        _operationGate.Wait();
         try
         {
-            Stream? stream = _stream;
-            _stream = null;
-            if (_leaveOpen)
+            if (disposing)
             {
-                stream?.Flush();
-            }
-            else
-            {
-                stream?.Dispose();
+                BeginDispose(asynchronously: false).GetAwaiter().GetResult();
             }
         }
         finally
         {
-            _operationGate.Release();
             base.Dispose(disposing);
         }
     }
@@ -718,35 +683,84 @@ public class HandoffStream : Stream, ITeeRandomAccessStream
     /// <inheritdoc/>
     public override async ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
-        {
-            await base.DisposeAsync().ConfigureAwait(false);
-            return;
-        }
+        await BeginDispose(asynchronously: true).ConfigureAwait(false);
+        await base.DisposeAsync().ConfigureAwait(false);
+        GC.SuppressFinalize(this);
+    }
 
+    private Task BeginDispose(bool asynchronously)
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) == 0)
+        {
+            _ = DisposeCurrentAsync(asynchronously);
+        }
+        else if (_disposeCompletion.Task.IsCompleted)
+        {
+            return Task.CompletedTask;
+        }
+        return _disposeCompletion.Task;
+    }
+
+    private async Task DisposeCurrentAsync(bool asynchronously)
+    {
+        try
+        {
+            Stream? stream = await DetachForDisposalAsync().ConfigureAwait(false);
+            if (stream is not null)
+            {
+                if (asynchronously)
+                {
+                    if (_leaveOpen)
+                    {
+                        await stream.FlushAsync().ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await stream.DisposeAsync().ConfigureAwait(false);
+                    }
+                }
+                else if (_leaveOpen)
+                {
+                    stream.Flush();
+                }
+                else
+                {
+                    stream.Dispose();
+                }
+            }
+            _disposeCompletion.SetResult();
+        }
+        catch (Exception error)
+        {
+            _disposeCompletion.SetException(error);
+        }
+    }
+
+    private async ValueTask<Stream?> DetachForDisposalAsync()
+    {
+        PendingMigration? pending;
         await _operationGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            Stream? stream = _stream;
-            _stream = null;
-            if (_leaveOpen)
+            pending = _pendingMigration;
+            if (pending is null || !ReferenceEquals(_stream, pending.Wrapper))
             {
-                if (stream is not null)
-                {
-                    await stream.FlushAsync().ConfigureAwait(false);
-                }
+                Stream? current = _stream;
+                _stream = null;
+                return current;
             }
-            else if (stream is not null)
-            {
-                await stream.DisposeAsync().ConfigureAwait(false);
-            }
+
+            pending.Wrapper.CancelMigration();
         }
         finally
         {
-            _operationGate.Release();
-            await base.DisposeAsync().ConfigureAwait(false);
-            GC.SuppressFinalize(this);
+            ExitOperation();
         }
+
+        // The final handoff owns the wrapper and installs the authoritative backing even on failure.
+        // Its caller observes any migration error. Dispose applies this endpoint's ownership policy.
+        await pending.Completion.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+        return Interlocked.Exchange(ref _stream, null);
     }
 
     private bool IsDisposed => Volatile.Read(ref _disposed) != 0;
@@ -785,37 +799,75 @@ public class HandoffStream : Stream, ITeeRandomAccessStream
 
     private void ExitOperation() => _operationGate.Release();
 
-    private async ValueTask<bool> FinishMigrationHandoffAsync(
-        MigratingStream migration,
-        Stream replacement,
-        bool destinationIsAuthoritative)
+    private async Task FinishMigrationHandoffAsync(MigratingStream migration, Stream source, Stream destination)
     {
-        await EnterOperationAsync(CancellationToken.None).ConfigureAwait(false);
+        ExceptionDispatchInfo? failure = null;
         try
         {
-            if (!ReferenceEquals(CurrentStream, migration))
-            {
-                return false;
-            }
+            await migration.MigrationCompletion.ConfigureAwait(false);
+        }
+        catch (Exception error)
+        {
+            failure = ExceptionDispatchInfo.Capture(error);
+        }
 
-            await migration.FlushAsync(CancellationToken.None).ConfigureAwait(false);
-            if (destinationIsAuthoritative)
+        // An endpoint being disposed still needs its final backing installed.
+        await _operationGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (ReferenceEquals(_stream, migration))
             {
-                migration.ReleaseDestinationOwnership();
+                bool useDestination = migration.DestinationIsAuthoritative;
+                Stream replacement = useDestination ? destination : source;
+                if (useDestination)
+                {
+                    migration.ReleaseDestinationOwnership();
+                }
+                else
+                {
+                    migration.ReleaseSourceOwnership();
+                }
+
+                // No foreground operation can observe the replacement until the gate is released.
+                // A flush or cursor error must leave it usable, even if the source was truncated.
+                _stream = replacement;
+                replacement.Position = migration.Position;
+                await migration.FlushAsync(CancellationToken.None).ConfigureAwait(false);
             }
             else
             {
-                migration.ReleaseSourceOwnership();
+                failure = ExceptionDispatchInfo.Capture(new InvalidOperationException(
+                    "The migration wrapper was replaced before migration finished.", failure?.SourceException));
             }
-
-            _stream = replacement;
-            return true;
+        }
+        catch (Exception error)
+        {
+            failure ??= ExceptionDispatchInfo.Capture(error);
         }
         finally
         {
-            ExitOperation();
+            try
+            {
+                await migration.DisposeAsync().ConfigureAwait(false);
+            }
+            catch (Exception error)
+            {
+                failure ??= ExceptionDispatchInfo.Capture(error);
+            }
+            finally
+            {
+                if (ReferenceEquals(_pendingMigration?.Wrapper, migration))
+                {
+                    _pendingMigration = null;
+                }
+                ExitOperation();
+            }
         }
+
+        failure?.Throw();
     }
+
+    private sealed record PendingMigration(MigratingStream Wrapper, Task Completion);
 
     private void ValidateReplacement(Stream stream)
     {

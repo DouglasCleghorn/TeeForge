@@ -3,10 +3,14 @@ param(
     [string] $PackageDirectory = "artifacts/package",
 
     [Parameter(Mandatory = $false)]
-    [string] $ExpectedVersion = "0.1.0"
+    [string] $ExpectedVersion
 )
 
 $ErrorActionPreference = "Stop"
+if (-not $ExpectedVersion) {
+    [xml] $project = Get-Content -Raw (Join-Path $PSScriptRoot '../src/TeeForge/TeeForge.csproj')
+    $ExpectedVersion = [string] $project.Project.PropertyGroup.Version
+}
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
@@ -48,6 +52,7 @@ try {
         "docs/recipes/replicate.md",
         "docs/recipes/broadcast.md",
         "docs/recipes/random-access.md",
+        "docs/recipes/remote-zip.md",
         "LICENSE",
         "THIRD-PARTY-NOTICES.txt"
     )

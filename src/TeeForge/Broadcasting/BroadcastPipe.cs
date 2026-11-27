@@ -364,7 +364,6 @@ public class BroadcastPipe
             return null;
         }
 
-        long oldMaximum = GetMaximumUnexaminedBytesUnsynchronized();
         Debug.Assert(_writingHead is not null);
         _writingHead.End += _writingHeadBytesBuffered;
         _readTail = _writingHead;
@@ -372,9 +371,8 @@ public class BroadcastPipe
 
         long newMaximum = GetMaximumUnexaminedBytesUnsynchronized();
         if (_options.PauseWriterThreshold > 0
-            && oldMaximum < _options.PauseWriterThreshold
             && newMaximum >= _options.PauseWriterThreshold
-            && _activeReaderCount > 0)
+            && _writerAwaitable.IsCompleted)
         {
             _writerAwaitable.SetUncompleted();
         }
@@ -585,12 +583,13 @@ public class BroadcastPipe
                 reader.Awaitable.BeginOperation(SignalReaderAwaitable, reader, cancellationToken);
             }
 
-            if (!_writerAwaitable.IsCompleted)
+            reader.MinimumReadBytes = minimumBytes;
+            if (!_writerAwaitable.IsCompleted
+                && GetMaximumUnexaminedBytesUnsynchronized() < _options.ResumeWriterThreshold)
             {
                 _writerAwaitable.Complete(out writerCompletion);
             }
 
-            reader.MinimumReadBytes = minimumBytes;
             result = new ValueTask<ReadResult>(reader.Endpoint!, token: 0);
         }
 
@@ -1018,7 +1017,9 @@ public class BroadcastPipe
         long minimumExamined = long.MaxValue;
         foreach (ReaderState reader in _readerStates)
         {
-            if (reader.Active)
+            // A reader waiting for more bytes cannot examine the current tail yet.
+            if (reader.Active && (reader.MinimumReadBytes == 0 ||
+                GetAvailableLengthUnsynchronized(reader) >= reader.MinimumReadBytes))
             {
                 minimumExamined = Math.Min(minimumExamined, reader.ExaminedPosition);
             }

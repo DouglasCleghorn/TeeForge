@@ -1,6 +1,6 @@
 # TeeForge public API reference
 
-Version 0.1.0 · **released** · .NET 10.
+Version 0.2.0 · **unreleased** · .NET 10.
 
 Generated from the analyzer-checked public API baseline. This is signature notation, not copyable C#: ! marks a non-null reference, ? marks a nullable reference, and -> introduces the return type. Use the [recipes](recipes/index.md) for runnable C# and the [specification](specification.md) for behavior.
 
@@ -693,6 +693,22 @@ override TeeForge.RandomAccess.RandomAccessMemoryStream.WriteAsync(byte[]! buffe
 override TeeForge.RandomAccess.RandomAccessMemoryStream.WriteAsync(System.ReadOnlyMemory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 override TeeForge.RandomAccess.RandomAccessMemoryStream.WriteByte(byte value) -> void
 override TeeForge.RandomAccess.RandomAccessMemoryStream.WriteTo(System.IO.Stream! stream) -> void
+override TeeForge.RandomAccess.ReadAheadStream.CanRead.get -> bool
+override TeeForge.RandomAccess.ReadAheadStream.CanSeek.get -> bool
+override TeeForge.RandomAccess.ReadAheadStream.CanWrite.get -> bool
+override TeeForge.RandomAccess.ReadAheadStream.Dispose(bool disposing) -> void
+override TeeForge.RandomAccess.ReadAheadStream.DisposeAsync() -> System.Threading.Tasks.ValueTask
+override TeeForge.RandomAccess.ReadAheadStream.Flush() -> void
+override TeeForge.RandomAccess.ReadAheadStream.Length.get -> long
+override TeeForge.RandomAccess.ReadAheadStream.Position.get -> long
+override TeeForge.RandomAccess.ReadAheadStream.Position.set -> void
+override TeeForge.RandomAccess.ReadAheadStream.Read(byte[]! buffer, int offset, int count) -> int
+override TeeForge.RandomAccess.ReadAheadStream.Read(System.Span<byte> buffer) -> int
+override TeeForge.RandomAccess.ReadAheadStream.ReadAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<int>!
+override TeeForge.RandomAccess.ReadAheadStream.ReadAsync(System.Memory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
+override TeeForge.RandomAccess.ReadAheadStream.Seek(long offset, System.IO.SeekOrigin origin) -> long
+override TeeForge.RandomAccess.ReadAheadStream.SetLength(long value) -> void
+override TeeForge.RandomAccess.ReadAheadStream.Write(byte[]! buffer, int offset, int count) -> void
 static TeeForge.RandomAccess.HttpRandomAccessStream.OpenAsync(System.Net.Http.HttpClient! client, System.Uri! requestUri, TeeForge.RandomAccess.HttpRandomAccessStreamOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TeeForge.RandomAccess.HttpRandomAccessStream!>!
 static TeeForge.RandomAccess.HttpRandomAccessStreamOptions.Default.get -> TeeForge.RandomAccess.HttpRandomAccessStreamOptions!
 static TeeForge.RandomAccess.TeeRandomAccess.TryGet(System.IO.Stream! stream, out TeeForge.RandomAccess.ITeeRandomAccessStream? randomAccess) -> bool
@@ -745,5 +761,13 @@ TeeForge.RandomAccess.RandomAccessMemoryStream.ReadAt(System.Span<byte> buffer, 
 TeeForge.RandomAccess.RandomAccessMemoryStream.ReadAtAsync(System.Memory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
 TeeForge.RandomAccess.RandomAccessMemoryStream.WriteAt(System.ReadOnlySpan<byte> buffer, long offset) -> void
 TeeForge.RandomAccess.RandomAccessMemoryStream.WriteAtAsync(System.ReadOnlyMemory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+TeeForge.RandomAccess.ReadAheadStream
+TeeForge.RandomAccess.ReadAheadStream.CanReadAt.get -> bool
+TeeForge.RandomAccess.ReadAheadStream.CanWriteAt.get -> bool
+TeeForge.RandomAccess.ReadAheadStream.ReadAheadStream(System.IO.Stream! source, int windowSize = 4194304, bool leaveOpen = false) -> void
+TeeForge.RandomAccess.ReadAheadStream.ReadAt(System.Span<byte> buffer, long offset) -> int
+TeeForge.RandomAccess.ReadAheadStream.ReadAtAsync(System.Memory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
+TeeForge.RandomAccess.ReadAheadStream.WriteAt(System.ReadOnlySpan<byte> buffer, long offset) -> void
+TeeForge.RandomAccess.ReadAheadStream.WriteAtAsync(System.ReadOnlyMemory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 TeeForge.RandomAccess.TeeRandomAccess
 ```

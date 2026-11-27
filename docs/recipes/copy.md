@@ -1,6 +1,6 @@
 # Copy a C# stream to multiple destinations
 
-TeeForge 0.1.0 · .NET 10 · **released**
+TeeForge 0.2.0 · .NET 10 · **unreleased**
 
 Select the extension with a destination collection; caller streams remain open and unflushed.
 
