@@ -146,6 +146,28 @@ public class HandoffStreamTests
         destination.Dispose();
     }
 
+    [Fact]
+    public async Task Overlapping_disposals_wait_for_in_flight_work()
+    {
+        using var destination = new BlockingWriteStream();
+        var stream = new HandoffStream(destination, leaveOpen: true);
+        Task writing = stream.WriteAsync(new byte[] { 42 }).AsTask();
+        await destination.WriteStarted.WaitAsync(TimeSpan.FromSeconds(5));
+        Task first = stream.DisposeAsync().AsTask();
+        Task second = stream.DisposeAsync().AsTask();
+        try
+        {
+            Assert.False(first.IsCompleted);
+            Assert.False(second.IsCompleted);
+        }
+        finally
+        {
+            destination.AllowWriteToComplete();
+            await Task.WhenAll(first, second, writing).WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        Assert.Equal([42], destination.ToArray());
+    }
+
     private sealed class BlockingWriteStream : MemoryStream
     {
         private readonly TaskCompletionSource _allowWrite = new(
