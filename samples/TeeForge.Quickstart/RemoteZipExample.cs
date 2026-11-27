@@ -19,9 +19,9 @@ internal static class RemoteZipExample
     }
 
     // Pass an HTTPS URL (including a signed object URL) that supports byte ranges.
-    public static async Task RunRemoteAsync(Uri url, string entryName, Stream destination, CancellationToken cancellationToken)
+    public static async Task RunRemoteAsync(
+        HttpClient client, Uri url, string entryName, Stream destination, CancellationToken cancellationToken)
     {
-        using var client = new HttpClient();
         await using var source = await HttpRandomAccessStream.OpenAsync(client, url, cancellationToken: cancellationToken);
         await CopyEntryAsync(source, entryName, destination, cancellationToken);
     }

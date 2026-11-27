@@ -52,6 +52,7 @@ With NuGet Central Package Management:
 | `TeeForge.Mirroring.TeeBufferedStream` | Coalescing logical I/O once before mirrored fan-out |
 | `TeeForge.Hashing.TeeHashStream` | Writing to destinations while calculating one or more cryptographic hashes or fast checksums |
 | `TeeForge.Broadcasting.BroadcastStream` | Broadcasting one readable source through a shared buffer to independent reader streams |
+| `TeeForge.Hashing.HashingReadStream` (0.2.0 development) | Computing hashes and counting bytes as a consumer reads a forward-only source |
 | `TeeForge.Hashing.BroadcastHashStream` | Broadcasting a readable source while calculating one set of hashes for the complete broadcast |
 | `TeeForge.Broadcasting.StreamCopyExtensions.CopyToAsync` | Copying one source to multiple destinations with independent buffered progress |
 | `TeeForge.ErasureCoding.ErasureStream` | Encoding and decoding a fixed-length sequence across headerless data/parity streams |
@@ -85,6 +86,49 @@ The selected entry is written to standard output. The recipe uses a 16 KiB
 window for sparse metadata reads. A larger window serves long sequential
 reads with fewer requests. See the
 [compiled C# example](samples/TeeForge.Quickstart/RemoteZipExample.cs).
+
+## Read a single column from remote Parquet
+
+From the 0.2.0 checkout, pass a range-enabled URL, a double column, and a
+zero-based row group. The sample uses Parquet.Net to decode the selected data.
+
+```sh
+dotnet run --project samples/TeeForge.Quickstart -c Release -- remote-parquet \
+  https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2024-01.parquet \
+  trip_distance 0
+```
+
+In live runs against these two objects, the requested HTTP ranges totaled:
+
+| Operation | Object size | Exact reads | With read-ahead |
+| --- | ---: | ---: | ---: |
+| Read the NuGet manifest above | 17.3 MB | 12 GETs, 10,598 bytes | 4 GETs, 26,027 bytes |
+| Read the first 1,048,576 trip distances | 50.0 MB | 87 GETs, 1,447,809 bytes | 27 GETs, 1,513,706 bytes |
+
+Both readers returned the same contents. The totals include the one-byte
+probe and count bytes requested in range headers. The samples print request
+statistics so you can check the trade-off on your own files.
+
+## Hash an upload while a storage client reads it
+
+In 0.2.0, wrap a readable request body with `HashingReadStream` and pass the
+wrapper to the uploader. Its first successful end-of-stream read publishes the
+digest. Await the upload as well before recording a successful receipt.
+
+```csharp
+using TeeForge.Hashing;
+
+await using var input = new HashingReadStream(request.Body, TeeHashAlgorithm.SHA256, leaveOpen: true);
+await blob.UploadAsync(input, cancellationToken);
+if (input.Results.IsComplete)
+{
+    string sha256 = input.Results[TeeHashAlgorithm.SHA256].Hex;
+    long length = input.BytesRead;
+}
+```
+
+The [Azure Blob upload sample](samples/TeeForge.BlobUpload/README.md) exercises a
+complete upload and an interrupted upload against a local storage emulator.
 
 ## Add buffering to a live stream
 

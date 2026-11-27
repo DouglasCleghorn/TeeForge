@@ -126,38 +126,10 @@ public class BroadcastHashStream : BroadcastStream
     {
         ValidateSource(source, readerCount);
         var results = new TeeHashResults();
-        HashWriteStream[] streams = HashCompletionCoordinator.CreateStreams(algorithms, results);
-        return new ConstructionState(new HashObserver(streams), results);
+        return new ConstructionState(new HashObserver(algorithms, results), results);
     }
 
     private sealed record ConstructionState(IBroadcastObserver Observer, TeeHashResults Results);
-
-    private sealed class HashObserver(HashWriteStream[] streams) : IBroadcastObserver
-    {
-        public void Append(ReadOnlySpan<byte> bytes)
-        {
-            foreach (HashWriteStream stream in streams)
-            {
-                stream.Write(bytes);
-            }
-        }
-
-        public void Complete()
-        {
-            foreach (HashWriteStream stream in streams)
-            {
-                stream.Dispose();
-            }
-        }
-
-        public void Dispose()
-        {
-            foreach (HashWriteStream stream in streams)
-            {
-                stream.DisposeWithoutFinalizing();
-            }
-        }
-    }
 }
 
 #pragma warning restore RS0026

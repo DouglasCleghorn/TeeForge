@@ -350,6 +350,20 @@ readers to reference or overlay an in-flight write buffer instead of forcing
 that flush, but it is deferred until buffer lifetime, ordering, retry, and
 failure visibility can remain compatible with the original implementation.
 
+## HashingReadStream
+
+`HashingReadStream` exposes a forward-only, read-only view of a readable source.
+Each successful read appends the bytes returned to the selected algorithms and
+increments `BytesRead`. A read into a nonempty destination that returns zero
+publishes all results together, including the digests for an empty source.
+A zero-length request or disposal before EOF leaves the hashes incomplete.
+A read failure after the source may have advanced prevents publication of a
+digest for an incomplete sequence. Consumers can inspect the same `Results`
+after disposal and can retain source ownership with `leaveOpen: true`.
+
+A complete digest describes the bytes read. For uploads, the application awaits
+the storage service's completion separately before recording the digest.
+
 ## TeeHashStream
 
 `TeeHashStream` derives from `TeeBufferedStream` and is write-only. It requires

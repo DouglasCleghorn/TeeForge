@@ -1,4 +1,11 @@
 #nullable enable
+TeeForge.Hashing.HashingReadStream
+TeeForge.Hashing.HashingReadStream.BytesRead.get -> long
+TeeForge.Hashing.HashingReadStream.HashingReadStream(System.IO.Stream! source, System.Collections.Generic.IEnumerable<System.Security.Cryptography.HashAlgorithmName>! algorithms, bool leaveOpen = false) -> void
+TeeForge.Hashing.HashingReadStream.HashingReadStream(System.IO.Stream! source, System.Collections.Generic.IEnumerable<TeeForge.Hashing.TeeHashAlgorithm>! algorithms, bool leaveOpen = false) -> void
+TeeForge.Hashing.HashingReadStream.HashingReadStream(System.IO.Stream! source, System.Security.Cryptography.HashAlgorithmName algorithm, bool leaveOpen = false) -> void
+TeeForge.Hashing.HashingReadStream.HashingReadStream(System.IO.Stream! source, TeeForge.Hashing.TeeHashAlgorithm algorithm, bool leaveOpen = false) -> void
+TeeForge.Hashing.HashingReadStream.Results.get -> TeeForge.Hashing.TeeHashResults!
 TeeForge.RandomAccess.ReadAheadStream
 TeeForge.RandomAccess.ReadAheadStream.CanReadAt.get -> bool
 TeeForge.RandomAccess.ReadAheadStream.CanWriteAt.get -> bool
@@ -7,6 +14,23 @@ TeeForge.RandomAccess.ReadAheadStream.ReadAt(System.Span<byte> buffer, long offs
 TeeForge.RandomAccess.ReadAheadStream.ReadAtAsync(System.Memory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
 TeeForge.RandomAccess.ReadAheadStream.WriteAt(System.ReadOnlySpan<byte> buffer, long offset) -> void
 TeeForge.RandomAccess.ReadAheadStream.WriteAtAsync(System.ReadOnlyMemory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+override TeeForge.Hashing.HashingReadStream.CanRead.get -> bool
+override TeeForge.Hashing.HashingReadStream.CanSeek.get -> bool
+override TeeForge.Hashing.HashingReadStream.CanWrite.get -> bool
+override TeeForge.Hashing.HashingReadStream.Dispose(bool disposing) -> void
+override TeeForge.Hashing.HashingReadStream.DisposeAsync() -> System.Threading.Tasks.ValueTask
+override TeeForge.Hashing.HashingReadStream.Flush() -> void
+override TeeForge.Hashing.HashingReadStream.Length.get -> long
+override TeeForge.Hashing.HashingReadStream.Position.get -> long
+override TeeForge.Hashing.HashingReadStream.Position.set -> void
+override TeeForge.Hashing.HashingReadStream.Read(System.Span<byte> buffer) -> int
+override TeeForge.Hashing.HashingReadStream.Read(byte[]! buffer, int offset, int count) -> int
+override TeeForge.Hashing.HashingReadStream.ReadAsync(System.Memory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
+override TeeForge.Hashing.HashingReadStream.ReadAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<int>!
+override TeeForge.Hashing.HashingReadStream.ReadByte() -> int
+override TeeForge.Hashing.HashingReadStream.Seek(long offset, System.IO.SeekOrigin origin) -> long
+override TeeForge.Hashing.HashingReadStream.SetLength(long value) -> void
+override TeeForge.Hashing.HashingReadStream.Write(byte[]! buffer, int offset, int count) -> void
 override TeeForge.RandomAccess.ReadAheadStream.CanRead.get -> bool
 override TeeForge.RandomAccess.ReadAheadStream.CanSeek.get -> bool
 override TeeForge.RandomAccess.ReadAheadStream.CanWrite.get -> bool

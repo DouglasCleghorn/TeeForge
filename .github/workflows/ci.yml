@@ -63,6 +63,15 @@ jobs:
       - name: Run quickstart recipes
         run: dotnet run -c Release --project samples/TeeForge.Quickstart --no-build --no-restore
 
+      - name: Verify streaming blob uploads with Azurite
+        if: runner.os == 'Linux'
+        run: |
+          docker run --detach --rm --name teeforge-azurite --publish 127.0.0.1:10000:10000 \
+            mcr.microsoft.com/azure-storage/azurite:3.38.0@sha256:c26024d62bf4a5b88a40968afd217234c00e1fc9a4790dc6105d1ca7979f6eec \
+            azurite-blob --blobHost 0.0.0.0 --disableTelemetry --silent
+          trap 'docker stop teeforge-azurite' EXIT
+          dotnet run -c Release --project samples/TeeForge.BlobUpload --no-build --no-restore -- --smoke
+
       - name: Verify generated documentation and build documentation site
         shell: pwsh
         run: |

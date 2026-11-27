@@ -1,10 +1,28 @@
+using System.Globalization;
 using TeeForge.Quickstart;
 
 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-if (args is ["remote-zip", var address, var entryName])
+if (args.Length >= 2 && args[0] is "remote-zip" or "remote-parquet")
 {
-    await using Stream output = Console.OpenStandardOutput();
-    await RemoteZipExample.RunRemoteAsync(new Uri(address), entryName, output, timeout.Token);
+    using var counter = new RangeRequestCounter();
+    using var client = new HttpClient(counter);
+    if (args is ["remote-zip", var address, var entryName])
+    {
+        await using Stream output = Console.OpenStandardOutput();
+        await RemoteZipExample.RunRemoteAsync(client, new Uri(address), entryName, output, timeout.Token);
+    }
+    else if (args is ["remote-parquet", var url, var columnName, var index] &&
+        int.TryParse(index, NumberStyles.None, CultureInfo.InvariantCulture, out int rowGroup))
+    {
+        await RemoteParquetExample.RunRemoteAsync(client, new Uri(url), columnName, rowGroup, timeout.Token);
+    }
+    else
+    {
+        Console.Error.WriteLine("Use remote-zip URL ENTRY or remote-parquet URL DOUBLE_COLUMN ROW_GROUP.");
+        return 1;
+    }
+
+    counter.PrintTotals();
     return 0;
 }
 
@@ -16,11 +34,12 @@ if (args is ["remote-zip", var address, var entryName])
     ("broadcast", BroadcastExample.RunAsync),
     ("random-access", RandomAccessExample.RunAsync),
     ("remote-zip", RemoteZipExample.RunAsync),
+    ("remote-parquet", RemoteParquetExample.RunAsync),
 ];
 
 if (args.Length > 1 || (args.Length == 1 && !examples.Any(example => example.Name == args[0])))
 {
-    Console.Error.WriteLine("Choose copy, hash, replicate, broadcast, random-access, or remote-zip [URL ENTRY]. Omit arguments to run all examples.");
+    Console.Error.WriteLine("Choose copy, hash, replicate, broadcast, random-access, remote-zip, or remote-parquet. Omit arguments to run all examples.");
     return 1;
 }
 
