@@ -1,6 +1,6 @@
 # Replicate writes to multiple writable streams
 
-TeeForge 0.1.0 · .NET 10 · **released**
+TeeForge 0.2.0 · .NET 10 · **unreleased**
 
 Use a write-only wrapper and explicitly retain destination ownership.
 

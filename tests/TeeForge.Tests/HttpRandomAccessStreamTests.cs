@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 
@@ -93,6 +94,63 @@ public class HttpRandomAccessStreamTests
         Assert.Equal(data[2..10], read);
         Assert.Contains((2L, 9L), handler.RequestedRanges);
         Assert.Contains((4L, 9L), handler.RequestedRanges);
+    }
+
+    [Fact]
+    public async Task Read_ahead_serves_small_sequential_reads_with_one_range_request()
+    {
+        byte[] data = new byte[1024 * 1024];
+        new Random(17).NextBytes(data);
+        const int readSize = 16 * 1024;
+        using var exactHandler = new RangeHandler(data);
+        using var exactClient = new HttpClient(exactHandler);
+        await using var exact = await HttpRandomAccessStream.OpenAsync(exactClient, ResourceUri);
+        await exact.CopyToAsync(Stream.Null, readSize);
+        Assert.Equal(1 + data.Length / readSize, exactHandler.RequestedRanges.Count);
+
+        using var handler = new RangeHandler(data);
+        using var client = new HttpClient(handler);
+        await using var source = await HttpRandomAccessStream.OpenAsync(client, ResourceUri);
+        await using var cached = new ReadAheadStream(source, windowSize: data.Length, leaveOpen: true);
+        using var copy = new MemoryStream();
+        await cached.CopyToAsync(copy, readSize);
+
+        Assert.Equal(data, copy.ToArray());
+        Assert.Equal(0, source.Position);
+        Assert.Equal([(0L, 0L), (0L, data.LongLength - 1)], handler.RequestedRanges.ToArray());
+    }
+
+    [Fact]
+    public async Task ZipArchive_can_extract_a_remote_manifest_by_reading_only_the_archive_tail()
+    {
+        using var packed = new MemoryStream();
+        byte[] manifest = "manifest payload"u8.ToArray();
+        using (var archive = new ZipArchive(packed, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            using (Stream large = archive.CreateEntry("large.bin", CompressionLevel.NoCompression).Open())
+            {
+                large.Write(new byte[1024 * 1024]);
+            }
+
+            using Stream entry = archive.CreateEntry("manifest.txt").Open();
+            entry.Write(manifest);
+        }
+
+        using var handler = new RangeHandler(packed.ToArray());
+        using var client = new HttpClient(handler);
+        await using var source = await HttpRandomAccessStream.OpenAsync(client, ResourceUri);
+        await using var cached = new ReadAheadStream(source, windowSize: 8192, leaveOpen: true);
+        using var reader = new ZipArchive(cached, ZipArchiveMode.Read, leaveOpen: true);
+        using Stream selected = reader.GetEntry("manifest.txt")!.Open();
+        using var output = new MemoryStream();
+        await selected.CopyToAsync(output);
+
+        Assert.Equal(manifest, output.ToArray());
+        Assert.Equal((0L, 0L), handler.RequestedRanges.First());
+        var ranges = handler.RequestedRanges.Skip(1).ToArray();
+        Assert.NotEmpty(ranges);
+        Assert.All(ranges, range => Assert.True(range.From >= packed.Length - 8192));
+        Assert.InRange(ranges.Sum(range => range.To - range.From + 1), manifest.Length, 8192);
     }
 
     private sealed class RangeHandler : HttpMessageHandler

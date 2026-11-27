@@ -35,6 +35,13 @@ writable members; use it only for outputs whose contents may be replaced.
   it; writes to the same codeword serialize.
 - One codeword covers `k * BlockSize` logical bytes. Each member receives one
   `BlockSize` payload, including zero padding in the final codeword.
+- Whole unwritten blocks in seekable members read as zeros. Opening a seekable
+  member whose payload ends midway through a required physical block, or
+  encountering EOF partway through a block during a read, raises
+  `EndOfStreamException`. To recover a known damaged member using parity, supply
+  `null` at its index when opening a degraded set.
+- Cancellation releases the reference held by a waiting cache operation.
+  Writes and disposal wait for outstanding member I/O before releasing shard buffers.
 - The logical length is fixed; `SetLength` is unsupported.
 - Forward-only writers must supply exactly the declared length and call
   `CompleteAsync`. This emits the final partial codeword and flushes members.

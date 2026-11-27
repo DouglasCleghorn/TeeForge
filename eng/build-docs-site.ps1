@@ -97,7 +97,7 @@ $landingContent = @"
 <p class="home-lead">Choose a stream API, run a working C# example, and check the contracts that make a composition correct.</p>
 <p><strong>Current documentation: $currentVersion ($($config.releaseStatus)).</strong> Unreleased documentation may describe APIs not yet available on NuGet.</p>
 <div class="cards"><a class="card" href="/$currentVersion/agent-guide.html"><strong>Choose the right API →</strong><p>A compact guide to installation, stream ownership, completion, and common mistakes.</p></a>
-<a class="card" href="/$currentVersion/recipes/index.html"><strong>Run five C# recipes →</strong><p>Copy to multiple destinations, hash, replicate writes, broadcast readers, and read byte ranges.</p></a>
+<a class="card" href="/$currentVersion/recipes/index.html"><strong>Run C# recipes →</strong><p>Copy to multiple destinations, hash, replicate writes, broadcast readers, read byte ranges, and extract a remote ZIP entry.</p></a>
 <a class="card" href="/$currentVersion/api-reference.html"><strong>Look up a signature →</strong><p>The exact public API, grouped by namespace and checked by the compiler's API analyzer.</p></a>
 <a class="card" href="/llms.txt"><strong>Read with an AI agent →</strong><p>Direct Markdown links to versioned guides, examples, and behavioral contracts.</p></a></div>
 <h2>Built around ordinary .NET streams</h2><p>TeeForge targets .NET 10 and composes with Stream and System.IO.Pipelines. Start with the recipe for your task; then verify ownership, cancellation, and completion before integrating it.</p>

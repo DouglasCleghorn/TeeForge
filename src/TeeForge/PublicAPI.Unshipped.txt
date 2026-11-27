@@ -1,1 +1,25 @@
 #nullable enable
+TeeForge.RandomAccess.ReadAheadStream
+TeeForge.RandomAccess.ReadAheadStream.CanReadAt.get -> bool
+TeeForge.RandomAccess.ReadAheadStream.CanWriteAt.get -> bool
+TeeForge.RandomAccess.ReadAheadStream.ReadAheadStream(System.IO.Stream! source, int windowSize = 4194304, bool leaveOpen = false) -> void
+TeeForge.RandomAccess.ReadAheadStream.ReadAt(System.Span<byte> buffer, long offset) -> int
+TeeForge.RandomAccess.ReadAheadStream.ReadAtAsync(System.Memory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
+TeeForge.RandomAccess.ReadAheadStream.WriteAt(System.ReadOnlySpan<byte> buffer, long offset) -> void
+TeeForge.RandomAccess.ReadAheadStream.WriteAtAsync(System.ReadOnlyMemory<byte> buffer, long offset, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+override TeeForge.RandomAccess.ReadAheadStream.CanRead.get -> bool
+override TeeForge.RandomAccess.ReadAheadStream.CanSeek.get -> bool
+override TeeForge.RandomAccess.ReadAheadStream.CanWrite.get -> bool
+override TeeForge.RandomAccess.ReadAheadStream.Dispose(bool disposing) -> void
+override TeeForge.RandomAccess.ReadAheadStream.DisposeAsync() -> System.Threading.Tasks.ValueTask
+override TeeForge.RandomAccess.ReadAheadStream.Flush() -> void
+override TeeForge.RandomAccess.ReadAheadStream.Length.get -> long
+override TeeForge.RandomAccess.ReadAheadStream.Position.get -> long
+override TeeForge.RandomAccess.ReadAheadStream.Position.set -> void
+override TeeForge.RandomAccess.ReadAheadStream.Read(System.Span<byte> buffer) -> int
+override TeeForge.RandomAccess.ReadAheadStream.Read(byte[]! buffer, int offset, int count) -> int
+override TeeForge.RandomAccess.ReadAheadStream.ReadAsync(System.Memory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
+override TeeForge.RandomAccess.ReadAheadStream.ReadAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<int>!
+override TeeForge.RandomAccess.ReadAheadStream.Seek(long offset, System.IO.SeekOrigin origin) -> long
+override TeeForge.RandomAccess.ReadAheadStream.SetLength(long value) -> void
+override TeeForge.RandomAccess.ReadAheadStream.Write(byte[]! buffer, int offset, int count) -> void

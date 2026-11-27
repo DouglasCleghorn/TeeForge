@@ -1,6 +1,13 @@
 using TeeForge.Quickstart;
 
 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+if (args is ["remote-zip", var address, var entryName])
+{
+    await using Stream output = Console.OpenStandardOutput();
+    await RemoteZipExample.RunRemoteAsync(new Uri(address), entryName, output, timeout.Token);
+    return 0;
+}
+
 (string Name, Func<CancellationToken, Task> Run)[] examples =
 [
     ("copy", CopyExample.RunAsync),
@@ -8,11 +15,12 @@ using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
     ("replicate", ReplicationExample.RunAsync),
     ("broadcast", BroadcastExample.RunAsync),
     ("random-access", RandomAccessExample.RunAsync),
+    ("remote-zip", RemoteZipExample.RunAsync),
 ];
 
 if (args.Length > 1 || (args.Length == 1 && !examples.Any(example => example.Name == args[0])))
 {
-    Console.Error.WriteLine("Choose copy, hash, replicate, broadcast, or random-access; omit the argument to run all five.");
+    Console.Error.WriteLine("Choose copy, hash, replicate, broadcast, random-access, or remote-zip [URL ENTRY]. Omit arguments to run all examples.");
     return 1;
 }
 

@@ -25,7 +25,7 @@ replicate writes, broadcast to independent readers, and read byte ranges.
 For automated reading, use [llms.txt](https://teeforge-docs.douglas-cleghorn.chatgpt.site/llms.txt).
 The NuGet package includes the usage guide at `docs/agent-guide.md` and the matching
 recipes and API reference. Check the documentation's release status against the
-installed package; these documentation snapshots describe release 0.1.0.
+installed package. For the unreleased 0.2.0 API, use the [development guide](docs/agent-guide.md).
 
 ## Install
 
@@ -59,12 +59,32 @@ With NuGet Central Package Management:
 | `TeeForge.RandomAccess.ITeeRandomAccessStream` | Reading or writing at explicit offsets without changing `Position` |
 | `TeeForge.RandomAccess.ITeeRangeReadSource` | Opening independent, bounded streams over logical ranges |
 | `TeeForge.RandomAccess.RandomAccessMemoryStream` | Thread-safe positional I/O over an in-memory byte sequence |
+| `TeeForge.RandomAccess.ReadAheadStream` (0.2.0 development) | Serving small reads and seeks from a bounded window over a range source |
 | `TeeForge.RandomAccess.HttpRandomAccessStream` | Reading large HTTP resources through resilient byte-range requests |
 | `TeeForge.Networking.MutualQuicConnection` | Mutually authenticated named streams and positional services over one QUIC connection |
 | `TeeForge.Networking.MultipathSenderStream` / `MultipathReceiverStream` | Mirroring, striping, or erasure-coding one directional byte stream across changing network paths |
 
 All shipped public APIs include XML documentation for IntelliSense. The
 package is marked as trim-compatible and Native AOT-compatible.
+
+## Read one entry from a remote ZIP or NuGet package
+
+The 0.2.0 development version can open a large archive on a range-enabled HTTP
+server and stream a selected entry. `HttpRandomAccessStream` checks the remote
+representation and `ReadAheadStream` serves small reads from a shared range.
+The example accepts an ordinary HTTPS URL or a signed object-storage URL.
+Run it from this checkout with the .NET 10 SDK.
+
+```sh
+dotnet run --project samples/TeeForge.Quickstart -c Release -- remote-zip \
+  https://api.nuget.org/v3-flatcontainer/microsoft.codeanalysis.csharp/4.14.0/microsoft.codeanalysis.csharp.4.14.0.nupkg \
+  Microsoft.CodeAnalysis.CSharp.nuspec
+```
+
+The selected entry is written to standard output. The recipe uses a 16 KiB
+window for sparse metadata reads. A larger window serves long sequential
+reads with fewer requests. See the
+[compiled C# example](samples/TeeForge.Quickstart/RemoteZipExample.cs).
 
 ## Add buffering to a live stream
 

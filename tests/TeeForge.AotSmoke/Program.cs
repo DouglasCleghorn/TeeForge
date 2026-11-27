@@ -6,6 +6,7 @@ using TeeForge.Broadcasting;
 using TeeForge.ErasureCoding;
 using TeeForge.Hashing;
 using TeeForge.Mirroring;
+using TeeForge.RandomAccess;
 
 byte[] payload = [1, 2, 3, 4];
 
@@ -127,6 +128,14 @@ await using (var second = new MemoryStream())
     {
         return 8;
     }
+}
+
+await using (var source = new RandomAccessMemoryStream(payload))
+await using (var buffered = new ReadAheadStream(source, windowSize: 2, leaveOpen: true))
+{
+    byte[] actual = new byte[payload.Length];
+    await buffered.ReadExactlyAsync(actual);
+    if (!actual.AsSpan().SequenceEqual(payload) || source.Position != 0) return 9;
 }
 
 return 0;

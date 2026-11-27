@@ -2,6 +2,18 @@
 
 All notable changes to TeeForge are documented here.
 
+## [0.2.0] - Unreleased
+
+- Add `ReadAheadStream` for small, seekable reads from a stable range source.
+  The remote ZIP recipe reads a selected entry using .NET's `ZipArchive`.
+- Make explicit-offset file I/O observe buffered writes and invalidate stale
+  read buffers. Preserve the live cursor when migration succeeds or rolls back.
+- Let broadcast readers wait for a minimum larger than the pause threshold
+  while independent slow readers still apply backpressure.
+- Drain outstanding erasure writes before releasing their buffers, release
+  canceled cache waiters, and report truncated member blocks. Whole unwritten
+  sparse blocks still read as zero.
+
 ## [0.1.0] - 2026-09-06
 
 Initial public release.

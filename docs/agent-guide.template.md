@@ -36,6 +36,7 @@ at `docs/agent-guide.md` and XML API documentation at `lib/net10.0/TeeForge.xml`
 | Broadcast pipe data to fixed independent readers | `BroadcastPipe`, `TeeForge.Broadcasting` | One pooled sequence; each reader maintains its own cursor. |
 | Read/write without changing `Position` | `ITeeRandomAccessStream`, `TeeRandomAccess`, `TeeForge.RandomAccess` | Explicit byte offsets; check capabilities. [Recipe](recipes/random-access.md). |
 | Open a bounded independent read stream | `ITeeRangeReadSource`, `TeeForge.RandomAccess` | Range reads have their own cursor and length. |
+| Extract one entry from a remote ZIP or NuGet package | `ReadAheadStream` over `HttpRandomAccessStream`, `TeeForge.RandomAccess` | Small reads share a bounded range. [Recipe](recipes/remote-zip.md). |
 | Read remote HTTP byte ranges | `HttpRandomAccessStream`, `TeeForge.RandomAccess` | Representation validation and bounded retries. |
 | Replace a live stream endpoint or migrate its backing | `HandoffStream` / `MigratingStream`, `TeeForge.Composition` | Serialized handoff; migration completion and failure fallback. |
 | Encode/recover headerless data/parity streams | `ErasureStream`, `TeeForge.ErasureCoding` | Caller supplies length, geometry, and member order. |
@@ -94,7 +95,7 @@ block, then read the results after that block.
 
 ## More detail
 
-- [Five runnable recipes](recipes/index.md)
+- [Runnable recipes](recipes/index.md)
 - [Exact public API signatures](api-reference.md)
 - [Behavioral specification](specification.md)
 - [Replication contracts](replica-stream.md)
@@ -103,4 +104,4 @@ block, then read the results after that block.
 - [Repository](https://github.com/DouglasCleghorn/TeeForge)
 
 Examples are copied from compiled source by `eng/update-docs.ps1`. CI rejects
-stale generated documentation and executes all five quickstart examples.
+stale generated documentation and executes all quickstart examples.

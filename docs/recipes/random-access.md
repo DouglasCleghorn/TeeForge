@@ -1,6 +1,6 @@
 # Read byte ranges without changing stream Position
 
-TeeForge 0.1.0 · .NET 10 · **released**
+TeeForge 0.2.0 · .NET 10 · **unreleased**
 
 Use explicit offsets and bounded range streams with independent cursors.
 
