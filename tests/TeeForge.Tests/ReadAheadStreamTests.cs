@@ -2,6 +2,32 @@ namespace TeeForge.Tests;
 
 public class ReadAheadStreamTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Constructor_rejects_a_mirror_without_range_reads(bool buffered)
+    {
+        using var file = new MemoryStream([1]);
+        using Stream mirror = buffered ? new TeeBufferedStream(file) : new TeeStream(file);
+        Assert.Throws<ArgumentException>(() => new ReadAheadStream(mirror));
+    }
+
+    [Fact]
+    public void Synchronous_disposal_uses_synchronous_cleanup_for_range_and_source()
+    {
+        byte[] bytes = new byte[32768];
+        using var range = new RangeSource(bytes, (_, _) => throw new NotSupportedException());
+        using var source = new RangeSource(bytes, (_, _) => range);
+        using var reader = new ReadAheadStream(source);
+        Assert.Equal(0, reader.ReadByte());
+        Assert.True(range.CanRead);
+        reader.Dispose();
+        Assert.False(range.CanRead);
+        Assert.False(range.DisposedAsynchronously);
+        Assert.False(source.CanRead);
+        Assert.False(source.DisposedAsynchronously);
+    }
+
     [Fact]
     public async Task Seeks_reuse_buffered_bytes_and_positional_reads_preserve_both_cursors()
     {
@@ -88,6 +114,13 @@ public class ReadAheadStreamTests
     private sealed class RangeSource(byte[] bytes, Func<int, int, Stream> open) : MemoryStream(bytes), ITeeRangeReadSource
     {
         internal List<Stream> Ranges { get; } = [];
+        internal bool DisposedAsynchronously { get; private set; }
+
+        public override ValueTask DisposeAsync()
+        {
+            DisposedAsynchronously = true;
+            return base.DisposeAsync();
+        }
 
         public ValueTask<Stream> OpenReadRangeAsync(long offset, long length, CancellationToken cancellationToken = default)
         {
