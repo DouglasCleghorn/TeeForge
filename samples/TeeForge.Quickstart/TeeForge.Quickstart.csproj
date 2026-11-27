@@ -5,6 +5,7 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Parquet.Net" />
     <ProjectReference Include="../../src/TeeForge/TeeForge.csproj" />
   </ItemGroup>
 </Project>

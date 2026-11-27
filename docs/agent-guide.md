@@ -36,6 +36,8 @@ at `docs/agent-guide.md` and XML API documentation at `lib/net10.0/TeeForge.xml`
 | Broadcast pipe data to fixed independent readers | `BroadcastPipe`, `TeeForge.Broadcasting` | One pooled sequence; each reader maintains its own cursor. |
 | Read/write without changing `Position` | `ITeeRandomAccessStream`, `TeeRandomAccess`, `TeeForge.RandomAccess` | Explicit byte offsets; check capabilities. [Recipe](recipes/random-access.md). |
 | Open a bounded independent read stream | `ITeeRangeReadSource`, `TeeForge.RandomAccess` | Range reads have their own cursor and length. |
+| Hash an upload as the SDK reads it | `HashingReadStream`, `TeeForge.Hashing` | Pass the wrapper to the consumer, then check `Results.IsComplete` and `BytesRead` after upload success. [Azure Blob sample](https://github.com/DouglasCleghorn/TeeForge/tree/main/samples/TeeForge.BlobUpload). |
+| Read a selected column and row group from remote Parquet | `ReadAheadStream` over `HttpRandomAccessStream`, `TeeForge.RandomAccess` | Parquet.Net reads through the window. [Recipe](recipes/remote-parquet.md). |
 | Extract one entry from a remote ZIP or NuGet package | `ReadAheadStream` over `HttpRandomAccessStream`, `TeeForge.RandomAccess` | Small reads share a bounded range. [Recipe](recipes/remote-zip.md). |
 | Read remote HTTP byte ranges | `HttpRandomAccessStream`, `TeeForge.RandomAccess` | Representation validation and bounded retries. |
 | Replace a live stream endpoint or migrate its backing | `HandoffStream` / `MigratingStream`, `TeeForge.Composition` | Serialized handoff; migration completion and failure fallback. |

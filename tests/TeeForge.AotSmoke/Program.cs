@@ -138,4 +138,15 @@ await using (var buffered = new ReadAheadStream(source, windowSize: 2, leaveOpen
     if (!actual.AsSpan().SequenceEqual(payload) || source.Position != 0) return 9;
 }
 
+await using (var source = new MemoryStream(payload))
+await using (var input = new HashingReadStream(source, TeeHashAlgorithm.SHA256, leaveOpen: true))
+{
+    await input.CopyToAsync(Stream.Null);
+    if (input.BytesRead != payload.Length || !input.Results.IsComplete ||
+        !input.Results[TeeHashAlgorithm.SHA256].Bytes.Span.SequenceEqual(SHA256.HashData(payload)))
+    {
+        return 10;
+    }
+}
+
 return 0;

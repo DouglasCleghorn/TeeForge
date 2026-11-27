@@ -53,6 +53,7 @@ try {
         "docs/recipes/broadcast.md",
         "docs/recipes/random-access.md",
         "docs/recipes/remote-zip.md",
+        "docs/recipes/remote-parquet.md",
         "LICENSE",
         "THIRD-PARTY-NOTICES.txt"
     )

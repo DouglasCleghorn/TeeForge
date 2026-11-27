@@ -24,7 +24,8 @@ $recipes = @(
     @{ Slug = 'replicate'; File = 'ReplicationExample.cs'; Title = 'Replicate writes to multiple writable streams'; Note = 'Use a write-only wrapper and explicitly retain destination ownership.' },
     @{ Slug = 'broadcast'; File = 'BroadcastExample.cs'; Title = 'Broadcast a stream to independent readers'; Note = 'Start all consumers concurrently so slow-reader backpressure can make progress.' },
     @{ Slug = 'random-access'; File = 'RandomAccessExample.cs'; Title = 'Read byte ranges without changing stream Position'; Note = 'Use explicit offsets and bounded range streams with independent cursors.' },
-    @{ Slug = 'remote-zip'; File = 'RemoteZipExample.cs'; Title = 'Read one entry from a remote ZIP or NuGet package'; Note = 'Open a range-enabled URL with a bounded read-ahead window and let ZipArchive locate the entry. Append a URL and entry name to the command to write its contents to standard output.' }
+    @{ Slug = 'remote-zip'; File = 'RemoteZipExample.cs'; Title = 'Read one entry from a remote ZIP or NuGet package'; Note = 'Open a range-enabled URL with a bounded read-ahead window and let ZipArchive locate the entry. Append a URL and entry name to the command to write its contents to standard output.' },
+    @{ Slug = 'remote-parquet'; File = 'RemoteParquetExample.cs'; Title = 'Read one column from one remote Parquet row group'; Note = 'Use Parquet.Net with a bounded HTTP range window. Append a range-enabled URL, a top-level DOUBLE column name, and a zero-based row group index to summarize the selected values. Both remote recipes report requests and requested range bytes on standard error.' }
 )
 $recipeLinks = [Collections.Generic.List[string]]::new()
 foreach ($recipe in $recipes) {

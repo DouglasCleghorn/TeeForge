@@ -4,6 +4,8 @@ All notable changes to TeeForge are documented here.
 
 ## [0.2.0] - Unreleased
 
+- Add `HashingReadStream` for pull-driven hashing with EOF-only results and byte counts.
+- Add recipes for reading one Parquet column over HTTP and hashing an Azure Blob upload.
 - Add `ReadAheadStream` for small, seekable reads from a stable range source.
   The remote ZIP recipe reads a selected entry using .NET's `ZipArchive`.
 - Make explicit-offset file I/O observe buffered writes and invalidate stale

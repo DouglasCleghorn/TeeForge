@@ -212,6 +212,23 @@ TeeForge.ErasureCoding.ErasureStreamOptions.RequireAllMembers.get -> bool
 
 ```text
 ~override TeeForge.Hashing.TeeHashAlgorithmId.Equals(object obj) -> bool
+override TeeForge.Hashing.HashingReadStream.CanRead.get -> bool
+override TeeForge.Hashing.HashingReadStream.CanSeek.get -> bool
+override TeeForge.Hashing.HashingReadStream.CanWrite.get -> bool
+override TeeForge.Hashing.HashingReadStream.Dispose(bool disposing) -> void
+override TeeForge.Hashing.HashingReadStream.DisposeAsync() -> System.Threading.Tasks.ValueTask
+override TeeForge.Hashing.HashingReadStream.Flush() -> void
+override TeeForge.Hashing.HashingReadStream.Length.get -> long
+override TeeForge.Hashing.HashingReadStream.Position.get -> long
+override TeeForge.Hashing.HashingReadStream.Position.set -> void
+override TeeForge.Hashing.HashingReadStream.Read(byte[]! buffer, int offset, int count) -> int
+override TeeForge.Hashing.HashingReadStream.Read(System.Span<byte> buffer) -> int
+override TeeForge.Hashing.HashingReadStream.ReadAsync(byte[]! buffer, int offset, int count, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<int>!
+override TeeForge.Hashing.HashingReadStream.ReadAsync(System.Memory<byte> buffer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
+override TeeForge.Hashing.HashingReadStream.ReadByte() -> int
+override TeeForge.Hashing.HashingReadStream.Seek(long offset, System.IO.SeekOrigin origin) -> long
+override TeeForge.Hashing.HashingReadStream.SetLength(long value) -> void
+override TeeForge.Hashing.HashingReadStream.Write(byte[]! buffer, int offset, int count) -> void
 override TeeForge.Hashing.TeeHashAlgorithmId.GetHashCode() -> int
 override TeeForge.Hashing.TeeHashAlgorithmId.ToString() -> string!
 override TeeForge.Hashing.TeeHashStream.Dispose(bool disposing) -> void
@@ -227,6 +244,13 @@ TeeForge.Hashing.BroadcastHashStream.BroadcastHashStream(System.Collections.Gene
 TeeForge.Hashing.BroadcastHashStream.BroadcastHashStream(System.Collections.Generic.IEnumerable<TeeForge.Hashing.TeeHashAlgorithm>! algorithms, out TeeForge.Hashing.TeeHashResults! results, System.IO.Stream! source, int readerCount, TeeForge.Broadcasting.BroadcastStreamOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
 TeeForge.Hashing.BroadcastHashStream.BroadcastHashStream(System.Security.Cryptography.HashAlgorithmName algorithm, out TeeForge.Hashing.TeeHashResults! results, System.IO.Stream! source, int readerCount, TeeForge.Broadcasting.BroadcastStreamOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
 TeeForge.Hashing.BroadcastHashStream.BroadcastHashStream(TeeForge.Hashing.TeeHashAlgorithm algorithm, out TeeForge.Hashing.TeeHashResults! results, System.IO.Stream! source, int readerCount, TeeForge.Broadcasting.BroadcastStreamOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> void
+TeeForge.Hashing.HashingReadStream
+TeeForge.Hashing.HashingReadStream.BytesRead.get -> long
+TeeForge.Hashing.HashingReadStream.HashingReadStream(System.IO.Stream! source, System.Collections.Generic.IEnumerable<System.Security.Cryptography.HashAlgorithmName>! algorithms, bool leaveOpen = false) -> void
+TeeForge.Hashing.HashingReadStream.HashingReadStream(System.IO.Stream! source, System.Collections.Generic.IEnumerable<TeeForge.Hashing.TeeHashAlgorithm>! algorithms, bool leaveOpen = false) -> void
+TeeForge.Hashing.HashingReadStream.HashingReadStream(System.IO.Stream! source, System.Security.Cryptography.HashAlgorithmName algorithm, bool leaveOpen = false) -> void
+TeeForge.Hashing.HashingReadStream.HashingReadStream(System.IO.Stream! source, TeeForge.Hashing.TeeHashAlgorithm algorithm, bool leaveOpen = false) -> void
+TeeForge.Hashing.HashingReadStream.Results.get -> TeeForge.Hashing.TeeHashResults!
 TeeForge.Hashing.TeeHashAlgorithm
 TeeForge.Hashing.TeeHashAlgorithm.Crc32 = 9 -> TeeForge.Hashing.TeeHashAlgorithm
 TeeForge.Hashing.TeeHashAlgorithm.Crc64 = 10 -> TeeForge.Hashing.TeeHashAlgorithm
