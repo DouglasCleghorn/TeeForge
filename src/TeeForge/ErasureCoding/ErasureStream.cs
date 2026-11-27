@@ -194,20 +194,19 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
         Enumerable.Range(0, _members.Length).Where(index => _members[index] is null).ToArray();
 
     /// <inheritdoc/>
-    public override bool CanRead => !IsDisposed && ReadableMemberCount >= DataShardCount;
+    public override bool CanRead => !IsDisposed && MembersCanRead;
 
     /// <inheritdoc/>
-    public override bool CanSeek => !IsDisposed && (CanReadAt || CanWriteAt);
+    public override bool CanSeek => !IsDisposed && (MembersCanReadAt || MembersCanWriteAt);
 
     /// <inheritdoc/>
-    public override bool CanWrite => !IsDisposed && _members.All(static member => member?.CanWrite == true);
+    public override bool CanWrite => !IsDisposed && MembersCanWrite;
 
     /// <inheritdoc/>
-    public bool CanReadAt => !IsDisposed && _members.Count(static member => member?.CanReadAt == true) >= DataShardCount;
+    public bool CanReadAt => !IsDisposed && MembersCanReadAt;
 
     /// <inheritdoc/>
-    public bool CanWriteAt => !IsDisposed && _members.All(static member => member?.CanWriteAt == true) &&
-        _members.Take(DataShardCount).All(static member => member?.CanReadAt == true);
+    public bool CanWriteAt => !IsDisposed && MembersCanWriteAt;
 
     /// <inheritdoc/>
     public override long Length
@@ -256,10 +255,9 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
         _positionGate.Wait();
         try
         {
-            ThrowIfDisposed();
             long position = _position;
             int read;
-            if (CanReadAt)
+            if (MembersCanReadAt)
             {
                 read = ReadAtCore(buffer, position, streaming: true);
                 ScheduleReadAhead(position + read);
@@ -294,10 +292,9 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
         await _positionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            ThrowIfDisposed();
             long position = _position;
             int read;
-            if (CanReadAt)
+            if (MembersCanReadAt)
             {
                 read = await ReadAtAsyncCore(
                     buffer,
@@ -425,9 +422,8 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
         _positionGate.Wait();
         try
         {
-            ThrowIfDisposed();
             long position = _position;
-            if (CanWriteAt)
+            if (MembersCanWriteAt)
             {
                 WriteAtCore(buffer, position, streaming: true);
             }
@@ -464,9 +460,8 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
         await _positionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            ThrowIfDisposed();
             long position = _position;
-            if (CanWriteAt)
+            if (MembersCanWriteAt)
             {
                 await WriteAtAsyncCore(
                     buffer,
@@ -603,8 +598,7 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
         await _positionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            ThrowIfDisposed();
-            if (!CanWriteAt && !_forwardWriteCompleted)
+            if (!MembersCanWriteAt && !_forwardWriteCompleted)
             {
                 if (_position != LogicalLength)
                 {
@@ -706,6 +700,11 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
     {
         lock (_disposeSync)
         {
+            if (_disposeTask?.IsCompleted == true)
+            {
+                return Task.CompletedTask;
+            }
+
             return _disposeTask ??= ReleaseResourcesAsync(asynchronously);
         }
     }
@@ -713,32 +712,30 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
     private async Task ReleaseResourcesAsync(bool asynchronously)
     {
         Volatile.Write(ref _disposed, 1);
-        _prefetchCancellation.Cancel();
-        await BeginMaintenanceAsync(CancellationToken.None, disposing: true).ConfigureAwait(false);
-        EndMaintenance();
-        ClearCache();
         try
         {
-            if (asynchronously && !_options.LeaveOpen)
-            {
-                foreach (MemberAccessor? member in _members)
-                {
-                    if (member is not null)
-                    {
-                        await member.Stream.DisposeAsync().ConfigureAwait(false);
-                    }
-                }
-            }
+            _prefetchCancellation.Cancel();
         }
         finally
         {
+            await BeginMaintenanceAsync(CancellationToken.None, disposing: true).ConfigureAwait(false);
+            EndMaintenance();
+            ClearCache();
             _positionGate.Dispose();
             _prefetchCancellation.Dispose();
-            DisposeMembers(disposeStreams: !asynchronously && !_options.LeaveOpen);
+            await DisposeMembersAsync(!_options.LeaveOpen, asynchronously).ConfigureAwait(false);
         }
     }
 
-    private int ReadableMemberCount => _members.Count(static member => member?.CanRead == true);
+    // Admitted operations retain their member access until disposal has drained their leases.
+    private bool MembersCanRead => _members.Count(static member => member?.CanRead == true) >= DataShardCount;
+
+    private bool MembersCanWrite => _members.All(static member => member?.CanWrite == true);
+
+    private bool MembersCanReadAt => _members.Count(static member => member?.CanReadAt == true) >= DataShardCount;
+
+    private bool MembersCanWriteAt => _members.All(static member => member?.CanWriteAt == true) &&
+        _members.Take(DataShardCount).All(static member => member?.CanReadAt == true);
 
     private bool IsDisposed => Volatile.Read(ref _disposed) != 0;
 
@@ -837,8 +834,8 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
         {
             CacheEntry candidate = node.Value;
             bool canEvict = candidate.References == 0 &&
-                (!CanRead || CanReadAt || candidate.Codeword != _forwardReadCodeword) &&
-                (!CanWrite || CanWriteAt || _forwardWriteCompleted || candidate.Codeword != _forwardWriteCodeword);
+                (!MembersCanRead || MembersCanReadAt || candidate.Codeword != _forwardReadCodeword) &&
+                (!MembersCanWrite || MembersCanWriteAt || _forwardWriteCompleted || candidate.Codeword != _forwardWriteCodeword);
             if (canEvict && !candidate.RecentlyUsed)
             {
                 return candidate;
@@ -1159,7 +1156,7 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
         long offset,
         CancellationToken cancellationToken)
     {
-        if (!CanRead)
+        if (!MembersCanRead)
         {
             throw new NotSupportedException("Fewer than the required number of members are readable.");
         }
@@ -1204,7 +1201,7 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
         long offset,
         CancellationToken cancellationToken)
     {
-        if (!CanWrite)
+        if (!MembersCanWrite)
         {
             throw new NotSupportedException("Every configured member must be writable.");
         }
@@ -1289,7 +1286,7 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
 
     private void ScheduleReadAhead(long nextOffset)
     {
-        if (_options.ReadAheadBlockCount == 0 || nextOffset >= LogicalLength || !CanReadAt || IsDisposed)
+        if (_options.ReadAheadBlockCount == 0 || nextOffset >= LogicalLength || IsDisposed || !MembersCanReadAt)
         {
             return;
         }
@@ -1355,7 +1352,6 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
 
     private async ValueTask FlushMembersAsync(CancellationToken cancellationToken)
     {
-        ThrowIfDisposed();
         await Task.WhenAll(_members
             .Where(static member => member is not null)
             .Select(async member => await member!.Stream.FlushAsync(cancellationToken).ConfigureAwait(false))).ConfigureAwait(false);
@@ -1488,7 +1484,7 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
 
     private void EnsureCanReadAt()
     {
-        if (!CanReadAt)
+        if (!MembersCanReadAt)
         {
             throw new NotSupportedException("At least k members must support positional reads.");
         }
@@ -1496,7 +1492,7 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
 
     private void EnsureCanWriteAt()
     {
-        if (!CanWriteAt)
+        if (!MembersCanWriteAt)
         {
             throw new NotSupportedException("Every member must support positional writes and every data member must support positional reads.");
         }
@@ -1504,8 +1500,12 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(IsDisposed, this);
 
-    internal void DisposeMembers(bool disposeStreams = true)
+    internal void DisposeMembers(bool disposeStreams = true) =>
+        DisposeMembersAsync(disposeStreams, asynchronously: false).GetAwaiter().GetResult();
+
+    private async Task DisposeMembersAsync(bool disposeStreams, bool asynchronously)
     {
+        Exception? firstFailure = null;
         foreach (MemberAccessor? member in _members)
         {
             if (member is null)
@@ -1513,12 +1513,33 @@ public class ErasureStream : Stream, ITeeRandomAccessStream
                 continue;
             }
 
-            if (disposeStreams)
+            try
             {
-                member.Stream.Dispose();
+                if (disposeStreams)
+                {
+                    if (asynchronously)
+                    {
+                        await member.Stream.DisposeAsync().ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        member.Stream.Dispose();
+                    }
+                }
             }
+            catch (Exception error)
+            {
+                firstFailure ??= error;
+            }
+            finally
+            {
+                member.Dispose();
+            }
+        }
 
-            member.Dispose();
+        if (firstFailure is not null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(firstFailure);
         }
     }
 
