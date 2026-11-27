@@ -18,6 +18,7 @@ public class HandoffStream : Stream, ITeeRandomAccessStream
     private Stream? _stream;
     private PendingMigration? _pendingMigration;
     private int _disposed;
+    private readonly TaskCompletionSource _disposeCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <summary>Initializes a stable endpoint over the supplied stream.</summary>
     /// <param name="stream">The initial stream pipeline.</param>
@@ -666,39 +667,48 @@ public class HandoffStream : Stream, ITeeRandomAccessStream
     /// <inheritdoc/>
     protected override void Dispose(bool disposing)
     {
-        if (disposing && Interlocked.Exchange(ref _disposed, 1) == 0)
+        try
         {
-            try
+            if (disposing)
             {
-                Stream? stream = DetachForDisposalAsync().AsTask().GetAwaiter().GetResult();
-                if (_leaveOpen)
-                {
-                    stream?.Flush();
-                }
-                else
-                {
-                    stream?.Dispose();
-                }
+                BeginDispose(asynchronously: false).GetAwaiter().GetResult();
             }
-            finally
-            {
-                base.Dispose(disposing);
-            }
-            return;
         }
-
-        base.Dispose(disposing);
+        finally
+        {
+            base.Dispose(disposing);
+        }
     }
 
     /// <inheritdoc/>
     public override async ValueTask DisposeAsync()
     {
+        await BeginDispose(asynchronously: true).ConfigureAwait(false);
+        await base.DisposeAsync().ConfigureAwait(false);
+        GC.SuppressFinalize(this);
+    }
+
+    private Task BeginDispose(bool asynchronously)
+    {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
         {
-            try
+            _ = DisposeCurrentAsync(asynchronously);
+        }
+        else if (_disposeCompletion.Task.IsCompleted)
+        {
+            return Task.CompletedTask;
+        }
+        return _disposeCompletion.Task;
+    }
+
+    private async Task DisposeCurrentAsync(bool asynchronously)
+    {
+        try
+        {
+            Stream? stream = await DetachForDisposalAsync().ConfigureAwait(false);
+            if (stream is not null)
             {
-                Stream? stream = await DetachForDisposalAsync().ConfigureAwait(false);
-                if (stream is not null)
+                if (asynchronously)
                 {
                     if (_leaveOpen)
                     {
@@ -709,16 +719,21 @@ public class HandoffStream : Stream, ITeeRandomAccessStream
                         await stream.DisposeAsync().ConfigureAwait(false);
                     }
                 }
+                else if (_leaveOpen)
+                {
+                    stream.Flush();
+                }
+                else
+                {
+                    stream.Dispose();
+                }
             }
-            finally
-            {
-                await base.DisposeAsync().ConfigureAwait(false);
-                GC.SuppressFinalize(this);
-            }
-            return;
+            _disposeCompletion.SetResult();
         }
-
-        await base.DisposeAsync().ConfigureAwait(false);
+        catch (Exception error)
+        {
+            _disposeCompletion.SetException(error);
+        }
     }
 
     private async ValueTask<Stream?> DetachForDisposalAsync()
