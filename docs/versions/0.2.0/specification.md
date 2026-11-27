@@ -105,10 +105,11 @@ streams.
 handoff operation gate it flushes the current stream, constructs a paused
 MigratingStream over that source, installs it as current, and starts migration.
 Foreground operations through the stable endpoint therefore use the migration
-wrapper. At either final handoff, the replacement takes the live logical
-cursor under the same operation gate. When `MigrationCompletion` succeeds, the method flushes the wrapper,
-transfers destination ownership to HandoffStream, and atomically installs the
-destination. The retired wrapper is then disposed, applying source ownership
+wrapper. At either final handoff, the endpoint installs the authoritative
+backing and transfers the live cursor under the operation gate. If the backing
+rejects the cursor or flushing fails, it remains installed and the caller
+receives the error. An earlier migration failure takes precedence. The
+retired wrapper is then disposed, applying source ownership
 from `MigratingStreamOptions`; `HandoffStream.LeaveOpen` controls the adopted
 destination's eventual disposal.
 
@@ -118,7 +119,11 @@ disposal cannot close the restored endpoint. A failure confined to optional
 source cleanup occurs after destination activation and therefore keeps the
 destination installed. If an unrelated handoff replaces the migration wrapper
 before either boundary, migration completion does not overwrite that newer
-replacement and reports `InvalidOperationException`.
+replacement and reports `InvalidOperationException` when the copy succeeded.
+Disposing the endpoint during its migration cancels outstanding copying and
+waits for the authoritative backing before applying the endpoint's ownership
+policy. Starting a second migration on the same active migration wrapper
+raises `InvalidOperationException`.
 
 ## ReplicaStream
 

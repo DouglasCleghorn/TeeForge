@@ -42,6 +42,10 @@ writable members; use it only for outputs whose contents may be replaced.
   `null` at its index when opening a degraded set.
 - Cancellation releases the reference held by a waiting cache operation.
   Writes and disposal wait for outstanding member I/O before releasing shard buffers.
+- When disposal begins, it stops admitting new I/O. Previously admitted
+  reads, writes, and completion calls retain their original member mode
+  until they finish. Disposal attempts to close each owned member even if
+  an earlier member reports an error.
 - The logical length is fixed; `SetLength` is unsupported.
 - Forward-only writers must supply exactly the declared length and call
   `CompleteAsync`. This emits the final partial codeword and flushes members.

@@ -279,7 +279,7 @@ public class ReadAheadStream : Stream, ITeeRandomAccessStream
     {
         if (disposing)
         {
-            BeginDispose().GetAwaiter().GetResult();
+            BeginDispose(asynchronously: false).GetAwaiter().GetResult();
         }
 
         base.Dispose(disposing);
@@ -288,32 +288,50 @@ public class ReadAheadStream : Stream, ITeeRandomAccessStream
     /// <inheritdoc/>
     public override async ValueTask DisposeAsync()
     {
-        await BeginDispose().ConfigureAwait(false);
+        await BeginDispose(asynchronously: true).ConfigureAwait(false);
         await base.DisposeAsync().ConfigureAwait(false);
         GC.SuppressFinalize(this);
     }
 
-    private Task BeginDispose()
+    private Task BeginDispose(bool asynchronously)
     {
         lock (_disposeLock)
         {
-            return _disposeTask ??= ReleaseResourcesAsync();
+            if (_disposeTask is { IsCompleted: true })
+            {
+                return Task.CompletedTask;
+            }
+            return _disposeTask ??= ReleaseResourcesAsync(asynchronously);
         }
     }
 
-    private async Task ReleaseResourcesAsync()
+    private async Task ReleaseResourcesAsync(bool asynchronously)
     {
         Volatile.Write(ref _disposed, 1);
         try
         {
-            await _stop.CancelAsync().ConfigureAwait(false);
+            if (asynchronously)
+            {
+                await _stop.CancelAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                _stop.Cancel();
+            }
         }
         finally
         {
             await _gate.WaitAsync().ConfigureAwait(false);
             try
             {
-                await CloseRangeAsync().ConfigureAwait(false);
+                if (asynchronously)
+                {
+                    await CloseRangeAsync().ConfigureAwait(false);
+                }
+                else
+                {
+                    CloseRange();
+                }
             }
             finally
             {
@@ -322,7 +340,14 @@ public class ReadAheadStream : Stream, ITeeRandomAccessStream
                 _gate.Release();
                 if (!_leaveOpen)
                 {
-                    await _source.DisposeAsync().ConfigureAwait(false);
+                    if (asynchronously)
+                    {
+                        await _source.DisposeAsync().ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        _source.Dispose();
+                    }
                 }
             }
         }

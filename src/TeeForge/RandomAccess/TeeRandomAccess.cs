@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Microsoft.Win32.SafeHandles;
+using TeeForge.Mirroring;
 using TeeForge.RandomAccess.Internal;
 
 namespace TeeForge.RandomAccess;
@@ -45,6 +46,12 @@ public static class TeeRandomAccess
 
     internal static ITeeRangeReadSource? TryGetRangeReadSource(Stream stream)
     {
+        // Mirrored ranges read every member through its positional capability.
+        if (stream is TeeStream { CanReadAt: false } or TeeBufferedStream { CanReadAt: false })
+        {
+            return null;
+        }
+
         if (stream is ITeeRangeReadSource rangeReadSource)
         {
             return rangeReadSource;

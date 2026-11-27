@@ -331,6 +331,130 @@ public class MigratingStreamTests
         destination.Dispose();
     }
 
+    [Fact]
+    public async Task Rejected_destination_cursor_keeps_the_authoritative_backing_and_retires_source()
+    {
+        using var source = new MemoryStream([1, 2, 3]) { Position = 9 };
+        using var destination = new BoundedCursorStream();
+        await using var handoff = new HandoffStream(source, leaveOpen: true);
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            handoff.MigrateAsync(destination, new MigratingStreamOptions(leaveSourceOpen: false)));
+
+        Assert.False(source.CanRead);
+        Assert.True(destination.CanRead);
+        handoff.Position = 0;
+        Assert.Equal(1, handoff.ReadByte());
+        Assert.Equal(1, destination.Position);
+    }
+
+    [Fact]
+    public async Task Rejected_rollback_cursor_preserves_the_copy_error_and_restores_source()
+    {
+        using var source = new BoundedCursorStream([1, 2, 3], initialPosition: 9);
+        using var destination = new ThrowingWriteStream();
+        await using var handoff = new HandoffStream(source, leaveOpen: true);
+
+        IOException error = await Assert.ThrowsAsync<IOException>(() =>
+            handoff.MigrateAsync(destination, new MigratingStreamOptions()));
+
+        Assert.Equal("destination failed", error.Message);
+        Assert.False(destination.CanRead);
+        Assert.True(source.CanRead);
+        handoff.Position = 0;
+        Assert.Equal(1, handoff.ReadByte());
+        Assert.Equal(1, source.Position);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Disposal_during_migration_drains_the_worker_and_honors_endpoint_ownership(
+        bool leaveOpen, bool asynchronously)
+    {
+        using var source = new MemoryStream([1, 2, 3]);
+        using var destination = new GatedFirstWriteStream();
+        var handoff = new HandoffStream(source, leaveOpen);
+        Task migration = handoff.MigrateAsync(destination,
+            new MigratingStreamOptions(leaveSourceOpen: !leaveOpen, leaveDestinationOpen: false));
+        await destination.FirstWriteStarted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Task dispose = asynchronously ? handoff.DisposeAsync().AsTask() : Task.Run(handoff.Dispose);
+        await dispose.WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => migration);
+        Assert.Equal(leaveOpen, source.CanRead);
+        Assert.False(destination.CanRead);
+    }
+
+    [Fact]
+    public async Task A_second_migration_cannot_use_an_internal_wrapper_as_its_source()
+    {
+        using var source = new MemoryStream([1, 2, 3]);
+        using var first = new GatedFirstWriteStream();
+        using var second = new MemoryStream();
+        await using var handoff = new HandoffStream(source, leaveOpen: true);
+        Task migration = handoff.MigrateAsync(first);
+        await first.FirstWriteStarted.WaitAsync(TimeSpan.FromSeconds(5));
+        try
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(() => handoff.MigrateAsync(second));
+        }
+        finally
+        {
+            first.ReleaseFirstWrite();
+            await migration.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+
+        Assert.Equal(1, handoff.ReadByte());
+        Assert.Empty(second.ToArray());
+    }
+
+    [Fact]
+    public async Task A_final_flush_failure_installs_destination_and_cleans_up_migration()
+    {
+        using var source = new MemoryStream([10, 20, 30]) { Position = 1 };
+        using var destination = new FinalFlushFailureStream();
+        await using var handoff = new HandoffStream(source, leaveOpen: true);
+
+        IOException error = await Assert.ThrowsAsync<IOException>(() =>
+            handoff.MigrateAsync(destination, new MigratingStreamOptions()));
+
+        Assert.Equal("final flush failed", error.Message);
+        Assert.False(source.CanRead);
+        Assert.Equal(20, handoff.ReadByte());
+        Assert.Equal(2, destination.Position);
+    }
+
+    private sealed class FinalFlushFailureStream : RandomAccessMemoryStream
+    {
+        private int _flushes;
+
+        public override Task FlushAsync(CancellationToken cancellationToken) =>
+            ++_flushes == 2 ? Task.FromException(new IOException("final flush failed")) : base.FlushAsync(cancellationToken);
+    }
+
+    private sealed class BoundedCursorStream : RandomAccessMemoryStream
+    {
+        public BoundedCursorStream() { }
+
+        public BoundedCursorStream(byte[] data, long initialPosition) : base(data)
+        {
+            base.Position = initialPosition;
+        }
+
+        public override long Position
+        {
+            get => base.Position;
+            set
+            {
+                ArgumentOutOfRangeException.ThrowIfGreaterThan(value, Length);
+                base.Position = value;
+            }
+        }
+    }
+
     private class RecordingMemoryStream : MemoryStream
     {
         private readonly string _name;

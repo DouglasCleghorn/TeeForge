@@ -97,6 +97,8 @@ public class MigratingStream : Stream, ITeeRandomAccessStream
 
     internal void ReleaseDestinationOwnership() => Volatile.Write(ref _leaveDestinationOpen, 1);
 
+    internal void CancelMigration() => _migrationCancellation.Cancel();
+
     internal void StartMigration()
     {
         if (Interlocked.Exchange(ref _started, 1) != 0)

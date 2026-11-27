@@ -210,6 +210,92 @@ public class ErasureStreamTests
         Assert.Equal(2, first.Reads);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Disposal_drains_an_admitted_completion_in_the_original_member_mode(bool forwardOnly)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var first = new GatedWriteMember(forwardOnly);
+        using var second = new MemoryStream();
+        using var parity = new MemoryStream();
+        byte[] payload = CreatePayload(2 * BlockSize + 1);
+        var options = new ErasureStreamOptions(leaveOpen: true, maximumCacheBytes: 1, readAheadBlockCount: 0);
+        var stream = ErasureStream.Create([first, second, parity], 2, 1, payload.Length, BlockSize, options);
+        Task writing = stream.WriteAsync(payload, timeout.Token).AsTask();
+        await first.Started.Task.WaitAsync(timeout.Token);
+        Task completing = stream.CompleteAsync(timeout.Token).AsTask();
+        Task disposing = stream.DisposeAsync().AsTask();
+        try
+        {
+            Assert.False(completing.IsCompleted);
+            Assert.False(disposing.IsCompleted);
+            Assert.False(stream.CanWrite);
+            await Assert.ThrowsAsync<ObjectDisposedException>(() => stream.CompleteAsync().AsTask());
+        }
+        finally
+        {
+            first.Release.TrySetResult();
+            await Task.WhenAll(writing, completing, disposing).WaitAsync(timeout.Token);
+        }
+
+        Assert.Equal(2 * BlockSize, first.Length);
+        Assert.Equal(forwardOnly ? 2 * BlockSize : BlockSize, second.Length);
+        using var storedFirst = new MemoryStream(first.ToArray());
+        using var reopened = ErasureStream.Open([storedFirst, second, parity], 2, 1, payload.Length, BlockSize, options);
+        byte[] decoded = new byte[payload.Length];
+        await reopened.ReadExactlyAsync(decoded, timeout.Token);
+        Assert.Equal(payload, decoded);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_member_disposal_failure_still_closes_the_other_members(bool asynchronous)
+    {
+        var first = new FailingDisposeMember();
+        var second = new MemoryStream();
+        var parity = new MemoryStream();
+        var stream = ErasureStream.Create([first, second, parity], 2, 1, BlockSize, BlockSize);
+
+        IOException error = asynchronous
+            ? await Assert.ThrowsAsync<IOException>(() => stream.DisposeAsync().AsTask())
+            : Assert.Throws<IOException>(stream.Dispose);
+
+        Assert.Same(first.Failure, error);
+        Assert.False(second.CanRead);
+        Assert.False(parity.CanRead);
+        await stream.DisposeAsync();
+    }
+
+    private sealed class GatedWriteMember(bool forwardOnly) : MemoryStream
+    {
+        internal TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public override bool CanSeek => !forwardOnly;
+
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            Started.TrySetResult();
+            await Release.Task.WaitAsync(cancellationToken);
+            await base.WriteAsync(buffer, cancellationToken);
+        }
+    }
+
+    private sealed class FailingDisposeMember : MemoryStream
+    {
+        internal IOException Failure { get; } = new("Member disposal failed.");
+
+        protected override void Dispose(bool disposing)
+        {
+            base.Dispose(disposing);
+            if (disposing)
+            {
+                throw Failure;
+            }
+        }
+    }
+
     private sealed class ControlledWriteMember(bool forwardOnly, Func<ValueTask> write) : MemoryStream, ITeeRandomAccessStream
     {
         public override bool CanSeek => !forwardOnly;
